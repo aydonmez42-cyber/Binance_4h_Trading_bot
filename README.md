@@ -1,8 +1,8 @@
-# TEST 9 — Bollinger Short Filter
+# TEST 11 — Bollinger Short Filter
 
 Based on TEST 8. Only the SHORT entry logic is changed.
 
-## TEST 9 changes
+## TEST 11 changes
 - BTCUSDT, 4H
 - EMA50 / EMA200 trend filter
 - Supertrend 10 / 5
@@ -17,7 +17,7 @@ Based on TEST 8. Only the SHORT entry logic is changed.
 - ATR trailing distance = 2x ATR
 - EMA exit OFF
 
-The purpose of TEST 9 is to improve the weak SHORT side without changing the successful LONG side.
+The purpose of TEST 11 is to improve the weak SHORT side without changing the successful LONG side.
 # Binance 4H Trading Bot — TEST 4
 
 Controlled test based on TEST 1.

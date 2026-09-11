@@ -12,9 +12,9 @@ ADX_THRESHOLD = 25
 
 # Supertrend filter
 SUPERTREND_PERIOD = 10
-SUPERTREND_MULTIPLIER = 5.0
+SUPERTREND_MULTIPLIER = 3.0
 
-# Bollinger Bands (TEST 9: short-side re-entry filter)
+# Bollinger Bands (TEST 11: short-side re-entry filter)
 BB_LENGTH = 20
 BB_STD_MULTIPLIER = 2.0
 USE_BB_SHORT_FILTER = True
