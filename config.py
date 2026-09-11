@@ -1,7 +1,7 @@
 # Binance 4H Trend-Cross Trading Bot
 # Baseline + ATR risk/exit configuration
 
-SYMBOL = "BTCUSDT"
+SYMBOL = "ETHUSDT"
 INTERVAL = "4h"
 
 # Indicator parameters
