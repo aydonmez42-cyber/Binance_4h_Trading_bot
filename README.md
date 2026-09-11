@@ -23,7 +23,7 @@ SHORT requires EMA50/EMA200 bearish cross, close below EMA200, ADX >25, Supertre
 This is a controlled experiment. Do not optimize parameters until the baseline result is reviewed.
 
 
-## TEST 7 controlled changes
+## TEST 8 controlled changes
 - EMA slow: 100 -> 200
 - Supertrend multiplier: 7.4 -> 4.0
 - EMA exit disabled
