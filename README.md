@@ -81,3 +81,20 @@ python backtest.py
 ## Important research rule
 
 Do not optimize parameters immediately. First compare this ATR-exit baseline with the original EMA100-only baseline. Then validate on multiple symbols and out-of-sample / walk-forward periods before any parameter optimization.
+
+
+## Controlled Exit Test 1
+
+This package is the first controlled ATR exit test after ATR Exit V1.
+
+Parameters:
+- Initial SL: 2.0 ATR
+- TP: 4.0 ATR
+- Trailing activation: +2.0 ATR
+- Trailing distance: 2.0 ATR
+- EMA100 exit: enabled
+
+Only the initial SL multiplier was changed from ATR Exit V1 (1.5 ATR -> 2.0 ATR).
+All entry rules and other exit parameters remain unchanged.
+
+This is a research backtest, not a live-trading configuration.
