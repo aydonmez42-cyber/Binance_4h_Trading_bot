@@ -57,8 +57,8 @@ def short_signal(df, i, cfg):
     if not (row["rsi"] < cfg.RSI_SHORT_THRESHOLD):
         return False
 
-    # TEST 11: require a bearish Bollinger re-entry for SHORTs.
-    # This is intentionally a short-side-only filter; LONG logic is unchanged.
+    # Bollinger short filter disabled for this test.
+    # 
     if cfg.USE_BB_SHORT_FILTER and not bool(row["bb_short_reentry"]):
         return False
 
