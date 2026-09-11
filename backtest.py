@@ -331,7 +331,7 @@ def main():
     print("Calculating indicators...")
     df = add_indicators(df, cfg)
 
-    print("Running ATR SL/TP/Trailing backtest...")
+    print("Running ATR SL/Trailing backtest...")
     print(
         f"ATR({cfg.ATR_LENGTH}) | SL={cfg.ATR_SL_MULTIPLIER}x | "
         f"TP={cfg.ATR_TP_MULTIPLIER}x | Trail activation={cfg.ATR_TRAIL_ACTIVATION}x | "

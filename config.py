@@ -1,7 +1,7 @@
 # Binance 4H Trend-Cross Trading Bot
 # Baseline + ATR risk/exit configuration
 
-SYMBOL = "ETHUSDT"
+SYMBOL = "BTCUSDT"
 INTERVAL = "4h"
 
 # Indicator parameters
@@ -18,7 +18,7 @@ CCI_LONG_THRESHOLD = 50
 CCI_SHORT_THRESHOLD = -50
 RSI_LENGTH = 14
 RSI_LONG_THRESHOLD = 50
-RSI_SHORT_THRESHOLD = 50
+RSI_SHORT_THRESHOLD = 40
 
 STOCH_RSI_RSI_LENGTH = 14
 STOCH_RSI_STOCH_LENGTH = 14
@@ -39,9 +39,9 @@ ATR_TRAIL_ACTIVATION = 2.0    # TEST 1: Activate trailing after +2 ATR unrealize
 ATR_TRAIL_MULTIPLIER = 2.0    # TEST 1: Trail distance = ATR * 2.0
 
 USE_ATR_SL = True
-USE_ATR_TP = True
+USE_ATR_TP = False
 USE_ATR_TRAILING = True
-USE_EMA100_EXIT = True
+USE_EMA100_EXIT = False
 
 # Backtest execution / costs
 INITIAL_CAPITAL = 10000.0
