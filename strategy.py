@@ -6,58 +6,40 @@ def recent_true(series, current_pos, max_bars):
     return bool(window.fillna(False).any())
 
 
-def di_bull_cross_series(df):
-    prev_plus = df["plus_di"].shift(1)
-    prev_minus = df["minus_di"].shift(1)
-    return (prev_plus <= prev_minus) & (df["plus_di"] > df["minus_di"])
-
-
-def di_bear_cross_series(df):
-    prev_plus = df["plus_di"].shift(1)
-    prev_minus = df["minus_di"].shift(1)
-    return (prev_minus <= prev_plus) & (df["minus_di"] > df["plus_di"])
-
 def long_signal(df, i, cfg):
     row = df.iloc[i]
 
     if i < 1:
         return False
 
-    # EMA50/EMA100 cross is the ONLY entry trigger.
+    # EMA50/EMA100 cross remains the ONLY entry trigger.
     if not bool(row["ema_bull_cross"]):
         return False
 
-    # Conditions that must be valid at the trigger candle.
     if not (row["close"] > row["ema100"]):
         return False
     if not (row["adx"] > cfg.ADX_THRESHOLD):
         return False
-    if not recent_true(di_bull_cross_series(df), i, 3):
+    if not bool(row["supertrend_bullish"]):
         return False
     if not (row["rsi"] > cfg.RSI_LONG_THRESHOLD):
         return False
 
-    # CCI can have occurred within the recent validity window.
     if not recent_true(
         df["cci"] > cfg.CCI_LONG_THRESHOLD, i, cfg.CCI_VALID_BARS
     ):
         return False
 
-    # Stoch RSI bullish cross can have occurred within its validity window.
     if not recent_true(
         df["stoch_bull_cross"], i, cfg.STOCH_VALID_BARS
     ):
         return False
 
-    # The stochastic level must still be valid at the trigger candle.
     if not (row["stoch_k"] > cfg.STOCH_LONG_THRESHOLD):
         return False
 
-    # The EMA cross candle itself must close above EMA100.
-    if not (row["close"] > row["ema100"]):
-        return False
-
     return True
+
 
 def short_signal(df, i, cfg):
     row = df.iloc[i]
@@ -72,7 +54,7 @@ def short_signal(df, i, cfg):
         return False
     if not (row["adx"] > cfg.ADX_THRESHOLD):
         return False
-    if not recent_true(di_bear_cross_series(df), i, 3):
+    if not bool(row["supertrend_bearish"]):
         return False
     if not (row["rsi"] < cfg.RSI_SHORT_THRESHOLD):
         return False
@@ -90,10 +72,8 @@ def short_signal(df, i, cfg):
     if not (row["stoch_k"] < cfg.STOCH_SHORT_THRESHOLD):
         return False
 
-    if not (row["close"] < row["ema100"]):
-        return False
-
     return True
+
 
 def exit_signal(position, row):
     if position == "LONG":

@@ -84,12 +84,96 @@ def stoch_rsi(close, rsi_length=14, stoch_length=14, k_smooth=3, d_smooth=3):
     return k, d
 
 
+
+def supertrend(high, low, close, period=10, multiplier=3.0):
+    """ATR-based Supertrend. Direction: +1 bullish, -1 bearish."""
+    tr1 = high - low
+    tr2 = (high - close.shift()).abs()
+    tr3 = (low - close.shift()).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr_value = tr.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+
+    hl2 = (high + low) / 2.0
+    basic_upper = hl2 + multiplier * atr_value
+    basic_lower = hl2 - multiplier * atr_value
+
+    final_upper = basic_upper.copy()
+    final_lower = basic_lower.copy()
+
+    for i in range(1, len(close)):
+        if pd.isna(atr_value.iloc[i]):
+            continue
+
+        prev_fu = final_upper.iloc[i - 1]
+        prev_fl = final_lower.iloc[i - 1]
+        prev_close = close.iloc[i - 1]
+
+        if pd.isna(prev_fu):
+            final_upper.iloc[i] = basic_upper.iloc[i]
+        else:
+            final_upper.iloc[i] = (
+                basic_upper.iloc[i]
+                if basic_upper.iloc[i] < prev_fu or prev_close > prev_fu
+                else prev_fu
+            )
+
+        if pd.isna(prev_fl):
+            final_lower.iloc[i] = basic_lower.iloc[i]
+        else:
+            final_lower.iloc[i] = (
+                basic_lower.iloc[i]
+                if basic_lower.iloc[i] > prev_fl or prev_close < prev_fl
+                else prev_fl
+            )
+
+    direction = pd.Series(np.nan, index=close.index, dtype=float)
+    st = pd.Series(np.nan, index=close.index, dtype=float)
+
+    first_valid = atr_value.first_valid_index()
+    if first_valid is None:
+        return pd.DataFrame({"supertrend": st, "supertrend_direction": direction}, index=close.index)
+
+    start = close.index.get_loc(first_valid)
+    direction.iloc[start] = 1 if close.iloc[start] >= final_lower.iloc[start] else -1
+    st.iloc[start] = final_lower.iloc[start] if direction.iloc[start] == 1 else final_upper.iloc[start]
+
+    for i in range(start + 1, len(close)):
+        if pd.isna(atr_value.iloc[i]):
+            continue
+
+        prev_dir = direction.iloc[i - 1]
+        if prev_dir == 1:
+            if close.iloc[i] < final_lower.iloc[i]:
+                direction.iloc[i] = -1
+                st.iloc[i] = final_upper.iloc[i]
+            else:
+                direction.iloc[i] = 1
+                st.iloc[i] = final_lower.iloc[i]
+        else:
+            if close.iloc[i] > final_upper.iloc[i]:
+                direction.iloc[i] = 1
+                st.iloc[i] = final_lower.iloc[i]
+            else:
+                direction.iloc[i] = -1
+                st.iloc[i] = final_upper.iloc[i]
+
+    return pd.DataFrame({"supertrend": st, "supertrend_direction": direction}, index=close.index)
+
+
 def add_indicators(df, cfg):
     out = df.copy()
 
     out["ema50"] = ema(out["close"], cfg.EMA_FAST)
     out["ema100"] = ema(out["close"], cfg.EMA_SLOW)
     out["atr"] = atr(out["high"], out["low"], out["close"], cfg.ATR_LENGTH)
+    st = supertrend(
+        out["high"], out["low"], out["close"],
+        cfg.SUPERTREND_PERIOD, cfg.SUPERTREND_MULTIPLIER
+    )
+    out["supertrend"] = st["supertrend"]
+    out["supertrend_direction"] = st["supertrend_direction"]
+    out["supertrend_bullish"] = out["supertrend_direction"] == 1
+    out["supertrend_bearish"] = out["supertrend_direction"] == -1
     adx_df = adx(out["high"], out["low"], out["close"], cfg.ADX_LENGTH)
     out["plus_di"] = adx_df["plus_di"]
     out["minus_di"] = adx_df["minus_di"]
