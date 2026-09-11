@@ -1,3 +1,23 @@
+# TEST 9 — Bollinger Short Filter
+
+Based on TEST 8. Only the SHORT entry logic is changed.
+
+## TEST 9 changes
+- BTCUSDT, 4H
+- EMA50 / EMA200 trend filter
+- Supertrend 10 / 5
+- ADX > 25
+- RSI long > 50 / short < 50
+- CCI and Stoch RSI conditions unchanged
+- SHORT additionally requires: previous closed candle closed above the upper Bollinger Band, and the current closed candle closes back at or below the upper band.
+- LONG logic is unchanged from TEST 8.
+- ATR SL = 2x ATR
+- ATR TP = 4x ATR
+- ATR trailing activation = +2x ATR
+- ATR trailing distance = 2x ATR
+- EMA exit OFF
+
+The purpose of TEST 9 is to improve the weak SHORT side without changing the successful LONG side.
 # Binance 4H Trading Bot — TEST 4
 
 Controlled test based on TEST 1.

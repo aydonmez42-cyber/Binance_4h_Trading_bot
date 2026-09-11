@@ -160,12 +160,23 @@ def supertrend(high, low, close, period=10, multiplier=3.0):
     return pd.DataFrame({"supertrend": st, "supertrend_direction": direction}, index=close.index)
 
 
+def bollinger_bands(close, length=20, std_multiplier=2.0):
+    mid = close.rolling(length).mean()
+    std = close.rolling(length).std(ddof=0)
+    upper = mid + std_multiplier * std
+    lower = mid - std_multiplier * std
+    return mid, upper, lower
+
+
 def add_indicators(df, cfg):
     out = df.copy()
 
     out["ema50"] = ema(out["close"], cfg.EMA_FAST)
     out["ema100"] = ema(out["close"], cfg.EMA_SLOW)
     out["atr"] = atr(out["high"], out["low"], out["close"], cfg.ATR_LENGTH)
+    out["bb_mid"], out["bb_upper"], out["bb_lower"] = bollinger_bands(
+        out["close"], cfg.BB_LENGTH, cfg.BB_STD_MULTIPLIER
+    )
     st = supertrend(
         out["high"], out["low"], out["close"],
         cfg.SUPERTREND_PERIOD, cfg.SUPERTREND_MULTIPLIER
@@ -205,6 +216,12 @@ def add_indicators(df, cfg):
     out["stoch_bear_cross"] = (
         (out["stoch_k"].shift(1) >= out["stoch_d"].shift(1))
         & (out["stoch_k"] < out["stoch_d"])
+    )
+
+    # Price was above the upper Bollinger Band and closes back inside it.
+    out["bb_short_reentry"] = (
+        (out["close"].shift(1) > out["bb_upper"].shift(1))
+        & (out["close"] <= out["bb_upper"])
     )
 
     return out
