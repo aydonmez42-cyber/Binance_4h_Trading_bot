@@ -6,30 +6,16 @@ def recent_true(series, current_pos, max_bars):
     return bool(window.fillna(False).any())
 
 
-def di_bull_cross(df, i):
-    if i < 1:
-        return False
-    return (
-        pd.notna(df["plus_di"].iloc[i - 1])
-        and pd.notna(df["minus_di"].iloc[i - 1])
-        and pd.notna(df["plus_di"].iloc[i])
-        and pd.notna(df["minus_di"].iloc[i])
-        and df["plus_di"].iloc[i - 1] <= df["minus_di"].iloc[i - 1]
-        and df["plus_di"].iloc[i] > df["minus_di"].iloc[i]
-    )
+def di_bull_cross_series(df):
+    prev_plus = df["plus_di"].shift(1)
+    prev_minus = df["minus_di"].shift(1)
+    return (prev_plus <= prev_minus) & (df["plus_di"] > df["minus_di"])
 
 
-def di_bear_cross(df, i):
-    if i < 1:
-        return False
-    return (
-        pd.notna(df["plus_di"].iloc[i - 1])
-        and pd.notna(df["minus_di"].iloc[i - 1])
-        and pd.notna(df["plus_di"].iloc[i])
-        and pd.notna(df["minus_di"].iloc[i])
-        and df["minus_di"].iloc[i - 1] <= df["plus_di"].iloc[i - 1]
-        and df["minus_di"].iloc[i] > df["plus_di"].iloc[i]
-    )
+def di_bear_cross_series(df):
+    prev_plus = df["plus_di"].shift(1)
+    prev_minus = df["minus_di"].shift(1)
+    return (prev_minus <= prev_plus) & (df["minus_di"] > df["plus_di"])
 
 def long_signal(df, i, cfg):
     row = df.iloc[i]
@@ -46,9 +32,7 @@ def long_signal(df, i, cfg):
         return False
     if not (row["adx"] > cfg.ADX_THRESHOLD):
         return False
-    if not di_bear_cross(df, i):
-        return False
-    if not di_bull_cross(df, i):
+    if not recent_true(di_bull_cross_series(df), i, 3):
         return False
     if not (row["rsi"] > cfg.RSI_LONG_THRESHOLD):
         return False
@@ -87,6 +71,8 @@ def short_signal(df, i, cfg):
     if not (row["close"] < row["ema100"]):
         return False
     if not (row["adx"] > cfg.ADX_THRESHOLD):
+        return False
+    if not recent_true(di_bear_cross_series(df), i, 3):
         return False
     if not (row["rsi"] < cfg.RSI_SHORT_THRESHOLD):
         return False

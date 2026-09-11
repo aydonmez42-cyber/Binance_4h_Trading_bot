@@ -100,23 +100,23 @@ All entry rules and other exit parameters remain unchanged.
 This is a research backtest, not a live-trading configuration.
 
 
-## Controlled Entry Test 2 — DI Cross + ADX > 25
+## Controlled Entry Test 3 — DI Cross Validity 3 Bars + ADX > 25
 
 This test is based on ATR Exit Test 1.
 
-Entry changes only:
-- ADX threshold: >25 (was >20)
-- LONG: +DI must cross above -DI on the same closed signal candle.
-- SHORT: -DI must cross above +DI on the same closed signal candle.
-- RSI remains >50 for LONG and <50 for SHORT.
-- CCI, Stoch RSI and EMA50/EMA100 entry rules are unchanged.
-- No RSI 70/30 upper/lower restriction is imposed in this test.
+Entry changes:
+- ADX threshold: >25.
+- LONG: +DI bullish cross above -DI must have occurred within the last 3 closed candles (including current signal candle).
+- SHORT: -DI bearish cross above +DI must have occurred within the last 3 closed candles (including current signal candle).
+- EMA50/EMA100 cross remains the actual entry trigger.
+- RSI, CCI and Stoch RSI rules remain unchanged.
+- No RSI 70/30 restriction is imposed.
 
-Exit settings remain unchanged from Test 1:
+Exit settings remain:
 - Initial SL = 2.0 ATR
 - TP = 4.0 ATR
 - Trailing activation = +2.0 ATR
 - Trailing distance = 2.0 ATR
 - EMA100 exit = enabled
 
-The DI cross is evaluated only on the closed signal candle. Entry is still executed at the next candle open.
+No look-ahead: all DI cross validity is calculated only from closed candles.
