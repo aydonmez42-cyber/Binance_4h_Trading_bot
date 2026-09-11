@@ -5,6 +5,32 @@ def recent_true(series, current_pos, max_bars):
     window = series.iloc[start:current_pos + 1]
     return bool(window.fillna(False).any())
 
+
+def di_bull_cross(df, i):
+    if i < 1:
+        return False
+    return (
+        pd.notna(df["plus_di"].iloc[i - 1])
+        and pd.notna(df["minus_di"].iloc[i - 1])
+        and pd.notna(df["plus_di"].iloc[i])
+        and pd.notna(df["minus_di"].iloc[i])
+        and df["plus_di"].iloc[i - 1] <= df["minus_di"].iloc[i - 1]
+        and df["plus_di"].iloc[i] > df["minus_di"].iloc[i]
+    )
+
+
+def di_bear_cross(df, i):
+    if i < 1:
+        return False
+    return (
+        pd.notna(df["plus_di"].iloc[i - 1])
+        and pd.notna(df["minus_di"].iloc[i - 1])
+        and pd.notna(df["plus_di"].iloc[i])
+        and pd.notna(df["minus_di"].iloc[i])
+        and df["minus_di"].iloc[i - 1] <= df["plus_di"].iloc[i - 1]
+        and df["minus_di"].iloc[i] > df["plus_di"].iloc[i]
+    )
+
 def long_signal(df, i, cfg):
     row = df.iloc[i]
 
@@ -19,6 +45,10 @@ def long_signal(df, i, cfg):
     if not (row["close"] > row["ema100"]):
         return False
     if not (row["adx"] > cfg.ADX_THRESHOLD):
+        return False
+    if not di_bear_cross(df, i):
+        return False
+    if not di_bull_cross(df, i):
         return False
     if not (row["rsi"] > cfg.RSI_LONG_THRESHOLD):
         return False

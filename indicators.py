@@ -65,7 +65,12 @@ def adx(high, low, close, length=14):
     minus_di = 100 * minus_smoothed / atr_value.replace(0, np.nan)
 
     dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
-    return dx.ewm(alpha=1 / length, adjust=False, min_periods=length).mean()
+    adx_value = dx.ewm(alpha=1 / length, adjust=False, min_periods=length).mean()
+
+    return pd.DataFrame(
+        {"plus_di": plus_di, "minus_di": minus_di, "adx": adx_value},
+        index=close.index,
+    )
 
 
 def stoch_rsi(close, rsi_length=14, stoch_length=14, k_smooth=3, d_smooth=3):
@@ -85,7 +90,10 @@ def add_indicators(df, cfg):
     out["ema50"] = ema(out["close"], cfg.EMA_FAST)
     out["ema100"] = ema(out["close"], cfg.EMA_SLOW)
     out["atr"] = atr(out["high"], out["low"], out["close"], cfg.ATR_LENGTH)
-    out["adx"] = adx(out["high"], out["low"], out["close"], cfg.ADX_LENGTH)
+    adx_df = adx(out["high"], out["low"], out["close"], cfg.ADX_LENGTH)
+    out["plus_di"] = adx_df["plus_di"]
+    out["minus_di"] = adx_df["minus_di"]
+    out["adx"] = adx_df["adx"]
     out["cci"] = cci(out["high"], out["low"], out["close"], cfg.CCI_LENGTH)
     out["rsi"] = rsi(out["close"], cfg.RSI_LENGTH)
 
