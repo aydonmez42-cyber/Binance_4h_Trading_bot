@@ -1,5 +1,3 @@
-# TEST 26A - 1H timeframe
-
 # TEST 20
 
 - Timeframe: 4h
@@ -40,3 +38,7 @@ TEST 25B: TEST 25A baz alınmıştır. Long ATR Stop Loss 2.5 -> 3.0 ATR olarak 
 
 
 TEST 26: TEST 25B baz alınmıştır. Yalnızca Long tarafına MACD(12,26,9) momentum filtresi eklenmiştir: MACD line > Signal ve histogram > 0. Short tarafı değişmemiştir.
+
+
+## TEST 28
+TEST 26 baz alınmıştır. Tek değişiklik: Short başlangıç ATR stopu 1.5 ATR → 3.0 ATR. Diğer tüm parametreler aynıdır.

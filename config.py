@@ -4,7 +4,7 @@
 SIGNAL_SYMBOL = "ETHUSDT"
 LONG_SYMBOL = "ETHUSD_PERP"
 SHORT_SYMBOL = "ETHUSDT"
-INTERVAL = "1d"
+INTERVAL = "4h"
 
 # Indicator parameters
 EMA_FAST = 50
@@ -41,7 +41,7 @@ STOCH_VALID_BARS = 3
 # ATR risk / exit model
 ATR_LENGTH = 14
 ATR_SL_MULTIPLIER = 3.0
-ATR_SHORT_SL_MULTIPLIER = 1.5       # TEST 1: Initial stop distance = ATR * 2.0
+ATR_SHORT_SL_MULTIPLIER = 3.0       # TEST 1: Initial stop distance = ATR * 2.0
 ATR_TP_MULTIPLIER = 4.0       # TEST 1: Take-profit distance = ATR * 4.0
 ATR_TRAIL_ACTIVATION = 2.0    # TEST 1: Activate trailing after +2 ATR unrealized
 ATR_TRAIL_MULTIPLIER = 2.0    # TEST 1: Trail distance = ATR * 2.0
