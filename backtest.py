@@ -4,7 +4,7 @@ import pandas as pd
 import config as cfg
 from data_manager import fetch_klines
 from indicators import add_indicators
-from strategy import long_signal, short_signal, exit_signal
+from strategy import long_signal, short_signal, exit_signal, supertrend_exit_signal
 
 
 def execution_price(price, side, is_entry, slippage):
@@ -101,6 +101,7 @@ def run_backtest(signal_df, long_df, short_df):
     exit_levels = None
     pending_entry = None
     pending_ema_exit = False
+    pending_st_exit = False
     trades, equity_curve = [], []
 
     for i in range(len(common)):
@@ -109,6 +110,14 @@ def run_backtest(signal_df, long_df, short_df):
         long_row = long_map.loc[t]
         short_row = short_map.loc[t]
         exec_row = long_row if position == "LONG" or (pending_entry and pending_entry["side"] == "LONG") else short_row
+
+        if pending_st_exit and position is not None:
+            exec_row = long_row if position == "LONG" else short_row
+            px = execution_price(float(exec_row["open"]), position, False, cfg.SLIPPAGE_RATE)
+            tr = exec_row.copy(); tr["entry_time_for_trade"] = entry_time
+            trade, equity = close_position(position, px, tr, entry_price, entry_fee, "SUPERTREND_EXIT", equity)
+            trades.append(trade)
+            position = entry_price = entry_time = None; entry_fee = 0.0; exit_levels = None; pending_st_exit = False
 
         if pending_ema_exit and position is not None:
             exec_row = long_row if position == "LONG" else short_row
@@ -155,9 +164,12 @@ def run_backtest(signal_df, long_df, short_df):
             else: marked_equity += (entry_price - float(short_row["close"])) * cfg.POSITION_QTY_ETH
         equity_curve.append({"time": sig["close_time"], "equity": marked_equity, "position": position or "FLAT"})
 
-        if i < len(common) - 1 and position is not None and cfg.USE_EMA100_EXIT and exit_signal(position, sig):
-            pending_ema_exit = True
-        if i < len(common) - 1 and position is None and pending_entry is None:
+        if i < len(common) - 1 and position is not None:
+            if supertrend_exit_signal(common, i, position):
+                pending_st_exit = True
+            elif cfg.USE_EMA100_EXIT and exit_signal(position, sig):
+                pending_ema_exit = True
+        if i < len(common) - 1 and position is None and pending_entry is None and not pending_st_exit:
             if long_signal(common, i, cfg): pending_entry = {"side": "LONG", "atr": float(sig["atr"])}
             elif short_signal(common, i, cfg): pending_entry = {"side": "SHORT", "atr": float(sig["atr"])}
 
