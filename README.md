@@ -26,3 +26,6 @@ TEST 22: Baz TEST 20. Long Stoch RSI koşulu: K, D'yi yukarı keser ve D > 30. D
 
 
 TEST 23: TEST 22 baz alınmıştır. Long CCI koşulu +50 olarak korunmuş, CCI_VALID_BARS 3'ten 1'e indirilmiştir. Diğer parametreler değiştirilmemiştir.
+
+
+TEST 24: TEST 23 baz alınmıştır. Long CCI eşiği +50'den +100'e çıkarılmıştır. ADX >25 ve diğer tüm parametreler aynıdır.
