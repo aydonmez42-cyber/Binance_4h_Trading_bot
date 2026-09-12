@@ -53,3 +53,6 @@ This is a controlled experiment. Do not optimize parameters until the baseline r
 
 
 TEST 13: ETHUSDT; Supertrend 10/5; Bollinger OFF; LONG ATR SL=2.0x; SHORT ATR SL=1.5x; TP=4.0x; trailing +2/2; other rules unchanged.
+
+
+TEST 14: SHORT RSI threshold changed from <50 to <45. All other TEST 13 parameters unchanged.
