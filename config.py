@@ -23,7 +23,7 @@ CCI_LONG_THRESHOLD = 50
 CCI_SHORT_THRESHOLD = -50
 RSI_LENGTH = 14
 RSI_LONG_THRESHOLD = 50
-RSI_SHORT_THRESHOLD = 45
+RSI_SHORT_THRESHOLD = 30
 
 STOCH_RSI_RSI_LENGTH = 14
 STOCH_RSI_STOCH_LENGTH = 14
@@ -63,3 +63,6 @@ DATA_END = None              # e.g. "2026-09-01"
 # Output
 TRADES_CSV = "backtest_trades.csv"
 EQUITY_CSV = "backtest_equity.csv"
+
+
+# TEST 15: RSI short threshold tightened from <45 to <30; all other TEST 14 settings unchanged.
