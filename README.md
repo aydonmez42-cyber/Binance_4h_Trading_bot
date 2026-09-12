@@ -1,24 +1,33 @@
-# TEST 16 — Dual Contract / Fixed 1 ETH
+# TEST 16 — Fixed 1 ETH Dual Contract
 
-## Architecture
-- Timeframe: 4H
-- Signal/indicator reference: ETHUSDT Futures
-- LONG execution: ETHUSDT Futures
-- SHORT execution: ETHUSDC Futures
-- Position size: fixed **1 ETH** per trade
-- RSI short threshold: **<30**
+- Signal / indicators: ETHUSDT Futures 4H
+- LONG execution: ETHUSDT Futures, fixed 1.0 ETH
+- SHORT execution: ETHUSDC Futures, fixed 1.0 ETH
+- RSI short threshold: < 30
+- EMA: 50 / 200
 - Supertrend: 10 / 5
-- EMA: 50 / 200 trend filter
-- ADX: >25
+- ADX: > 25
 - Bollinger short filter: OFF
-- Long SL: 2 ATR
-- Short SL: 1.5 ATR
-- TP: 4 ATR
-- Trailing activation: +2 ATR
-- Trailing distance: 2 ATR
+- Long ATR SL: 2.0 ATR
+- Short ATR SL: 1.5 ATR
+- ATR TP: 4.0 ATR
+- ATR trailing: activates at +2 ATR, distance 2 ATR
 - EMA exit: OFF
 
-## Important
-This test uses Binance Futures OHLCV for both execution symbols. Signals are calculated from ETHUSDT so that the strategy logic remains identical while Long and Short are executed on separate contracts.
+## Railway
 
-Funding costs are not included yet. Live deployment must also account for funding, actual futures fees, spread, margin and liquidation rules.
+Set the service Start Command to:
+
+`python main.py`
+
+Then use Railway SSH to run:
+
+`python backtest.py`
+
+The backtest downloads Binance Futures data for ETHUSDT and ETHUSDC and writes:
+- `backtest_trades.csv`
+- `backtest_equity.csv`
+
+## Important implementation note
+
+The backtest stores `open_time` as the DataFrame index after mapping. Entry/exit timestamps are therefore read from `Series.name` rather than an `open_time` column.

@@ -78,7 +78,7 @@ def close_position(position, px, row, entry_price, entry_fee, reason, equity):
     pnl_net = pnl_gross - entry_fee - exit_fee
     equity += pnl_gross - exit_fee
     trade = {
-        "entry_time": row["entry_time_for_trade"], "exit_time": row["open_time"],
+        "entry_time": row["entry_time_for_trade"], "exit_time": row.name,
         "side": position, "symbol": cfg.LONG_SYMBOL if position == "LONG" else cfg.SHORT_SYMBOL,
         "qty_eth": qty, "entry_price": entry_price, "exit_price": px,
         "gross_pnl": pnl_gross, "fees": entry_fee + exit_fee,
@@ -124,7 +124,7 @@ def run_backtest(signal_df, long_df, short_df):
             px = execution_price(float(exec_row["open"]), side, True, cfg.SLIPPAGE_RATE)
             entry_fee = commission(abs(px * cfg.POSITION_QTY_ETH))
             equity -= entry_fee
-            position, entry_price, entry_time = side, px, exec_row["open_time"]
+            position, entry_price, entry_time = side, px, exec_row.name
             exit_levels = build_exit_levels(side, entry_price, pending_entry["atr"])
             exit_levels["entry_price"] = entry_price
             pending_entry = None
