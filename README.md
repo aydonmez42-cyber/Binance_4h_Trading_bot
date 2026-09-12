@@ -29,3 +29,6 @@ TEST 23: TEST 22 baz alınmıştır. Long CCI koşulu +50 olarak korunmuş, CCI_
 
 
 TEST 24: TEST 23 baz alınmıştır. Long CCI eşiği +50'den +100'e çıkarılmıştır. ADX >25 ve diğer tüm parametreler aynıdır.
+
+
+TEST 25A: TEST 24 baz alınmıştır. Long ATR Stop Loss 2.0 -> 2.5 ATR olarak değiştirilmiştir. Short ATR SL 1.5 ATR olarak korunmuştur. Diğer parametreler aynıdır.
