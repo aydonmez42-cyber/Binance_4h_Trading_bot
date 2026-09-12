@@ -1,7 +1,9 @@
 # Binance 4H Trend-Cross Trading Bot
 # Baseline + ATR risk/exit configuration
 
-SYMBOL = "ETHUSDT"
+SIGNAL_SYMBOL = "ETHUSDT"
+LONG_SYMBOL = "ETHUSDT"
+SHORT_SYMBOL = "ETHUSDC"
 INTERVAL = "4h"
 
 # Indicator parameters
@@ -51,7 +53,8 @@ USE_EMA100_EXIT = False
 
 # Backtest execution / costs
 INITIAL_CAPITAL = 10000.0
-POSITION_SIZE_PCT = 1.0       # 100% of available equity per trade
+POSITION_QTY_ETH = 1.0        # Fixed position size: exactly 1 ETH per trade
+POSITION_SIZE_PCT = 1.0       # Kept for compatibility; NOT used for sizing in TEST 16
 LEVERAGE = 1.0
 FEE_RATE = 0.0004            # 0.04% per side
 SLIPPAGE_RATE = 0.0002       # 0.02% assumed execution slippage
@@ -65,4 +68,6 @@ TRADES_CSV = "backtest_trades.csv"
 EQUITY_CSV = "backtest_equity.csv"
 
 
-# TEST 15: RSI short threshold tightened from <45 to <30; all other TEST 14 settings unchanged.
+# TEST 16: Fixed 1 ETH. LONG executes on ETHUSDT; SHORT executes on ETHUSDC.
+# Signals/indicators are generated from ETHUSDT; execution/exits use the selected contract.
+# RSI short threshold remains <30 from TEST 15.

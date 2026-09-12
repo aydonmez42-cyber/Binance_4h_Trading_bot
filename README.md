@@ -1,58 +1,24 @@
-# TEST 11 ETHUSDT — Bollinger Short Filter
+# TEST 16 — Dual Contract / Fixed 1 ETH
 
-Based on TEST 8. Only the SHORT entry logic is changed.
-
-## TEST 11 ETHUSDT changes
-- BTCUSDT, 4H
-- EMA50 / EMA200 trend filter
-- Supertrend 10 / 5
-- ADX > 25
-- RSI long > 50 / short < 50
-- CCI and Stoch RSI conditions unchanged
-- SHORT additionally requires: previous closed candle closed above the upper Bollinger Band, and the current closed candle closes back at or below the upper band.
-- LONG logic is unchanged from TEST 8.
-- ATR SL = 2x ATR
-- ATR TP = 4x ATR
-- ATR trailing activation = +2x ATR
-- ATR trailing distance = 2x ATR
-- EMA exit OFF
-
-The purpose of TEST 11 ETHUSDT is to improve the weak SHORT side without changing the successful LONG side.
-# Binance 4H Trading Bot — TEST 4
-
-Controlled test based on TEST 1.
-
-## TEST 4 changes
-- Timeframe: 4h (unchanged)
-- DI cross filter: removed completely from entry logic
-- ADX threshold: > 25
-- Supertrend filter: Period 10, Multiplier 4.0
-- ATR exits: SL 2 ATR, TP 4 ATR, trailing activation +2 ATR, trailing distance 2 ATR
-- EMA200 exit: enabled
-- Entry execution: signal from closed candle, next candle open
-- Symbol: BTCUSDT
-
-All other entry conditions remain unchanged from TEST 1.
-
-## Entry logic
-LONG requires EMA50/EMA200 bullish cross, close above EMA200, ADX >25, Supertrend bullish, RSI >50, recent CCI >+50, recent bullish Stoch RSI cross and K >20.
-
-SHORT requires EMA50/EMA200 bearish cross, close below EMA200, ADX >25, Supertrend bearish, RSI <50, recent CCI <-50, recent bearish Stoch RSI cross and K <80.
+## Architecture
+- Timeframe: 4H
+- Signal/indicator reference: ETHUSDT Futures
+- LONG execution: ETHUSDT Futures
+- SHORT execution: ETHUSDC Futures
+- Position size: fixed **1 ETH** per trade
+- RSI short threshold: **<30**
+- Supertrend: 10 / 5
+- EMA: 50 / 200 trend filter
+- ADX: >25
+- Bollinger short filter: OFF
+- Long SL: 2 ATR
+- Short SL: 1.5 ATR
+- TP: 4 ATR
+- Trailing activation: +2 ATR
+- Trailing distance: 2 ATR
+- EMA exit: OFF
 
 ## Important
-This is a controlled experiment. Do not optimize parameters until the baseline result is reviewed.
+This test uses Binance Futures OHLCV for both execution symbols. Signals are calculated from ETHUSDT so that the strategy logic remains identical while Long and Short are executed on separate contracts.
 
-
-## TEST 8 controlled changes
-- EMA slow: 100 -> 200
-- Supertrend multiplier: 7.4 -> 4.0
-- EMA exit disabled
-- EMA50/EMA200 used as trend regime filter, not cross trigger
-- ATR SL 2x, ATR TP 4x, trailing activation 2x and distance 2x retained
-- ADX > 25 retained; DI remains removed
-
-
-TEST 13: ETHUSDT; Supertrend 10/5; Bollinger OFF; LONG ATR SL=2.0x; SHORT ATR SL=1.5x; TP=4.0x; trailing +2/2; other rules unchanged.
-
-
-TEST 14: SHORT RSI threshold changed from <50 to <45. All other TEST 13 parameters unchanged.
+Funding costs are not included yet. Live deployment must also account for funding, actual futures fees, spread, margin and liquidation rules.
