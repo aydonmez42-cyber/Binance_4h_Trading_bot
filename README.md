@@ -1,4 +1,4 @@
-# TEST 17
+# TEST 19
 
 - Timeframe: 4h
 - Signal source: ETHUSDT Futures
@@ -6,7 +6,7 @@
 - SHORT: ETHUSDT (Binance USD-M), fixed 1 ETH exposure
 - Long RSI: >55
 - Short RSI: <30
-- Supertrend: 10 / 5
+- Supertrend: 10 / 7.5
 - EMA: 50 / 200
 - ADX: >25
 - Bollinger: OFF
