@@ -2,22 +2,26 @@ import time
 import requests
 import pandas as pd
 
-BINANCE_FUTURES_URL = "https://fapi.binance.com/fapi/v1/klines"
+USD_M_URL = "https://fapi.binance.com/fapi/v1/klines"
+COIN_M_URL = "https://dapi.binance.com/dapi/v1/klines"
 
 
-def fetch_klines(symbol, interval, start_date, end_date=None, limit=1000):
+def fetch_klines(symbol, interval, start_date, end_date=None, limit=1000, market_type=None):
     start_ms = int(pd.Timestamp(start_date, tz="UTC").timestamp() * 1000)
     end_ms = None
     if end_date:
         end_ms = int(pd.Timestamp(end_date, tz="UTC").timestamp() * 1000)
 
     rows = []
+    if market_type is None:
+        market_type = "COIN_M" if symbol.endswith("_PERP") or symbol.endswith("_PERP".upper()) else "USD_M"
+    url = COIN_M_URL if market_type == "COIN_M" else USD_M_URL
     while True:
         params = {"symbol": symbol, "interval": interval, "limit": limit, "startTime": start_ms}
         if end_ms is not None:
             params["endTime"] = end_ms
 
-        r = requests.get(BINANCE_FUTURES_URL, params=params, timeout=30)
+        r = requests.get(url, params=params, timeout=30)
         r.raise_for_status()
         data = r.json()
         if not data:
