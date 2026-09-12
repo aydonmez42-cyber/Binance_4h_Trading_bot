@@ -48,3 +48,19 @@ Ancak Railway'de tek process kullanılacaksa paper trading sürecini çalıştı
 `paper_state.json` ve `paper_trades.csv`.
 
 İlk gerçek emir kesinlikle bu paket tarafından gönderilmemelidir. Paper trading dönemi tamamlandıktan sonra ayrı bir live-execution katmanı oluşturulmalıdır.
+
+## Telegram bildirimleri
+
+Railway Variables / Environment Variables bölümüne şunları ekleyin:
+
+- `TELEGRAM_BOT_TOKEN` = Telegram bot token
+- `TELEGRAM_CHAT_ID` = Bildirimlerin gönderileceği chat ID
+
+Bot:
+- Yeni paper pozisyon açıldığında anlık bildirim gönderir.
+- Pozisyon kapandığında anlık bildirim gönderir.
+- Her gün **09:00 Europe/Istanbul** saatinde günlük rapor gönderir.
+- Servis 09:00'dan sonra yeniden başlarsa, o günün raporunu ilk çalışmada gönderir; aynı gün ikinci kez göndermez.
+- Token/chat ID tanımlı değilse paper trading çalışmaya devam eder; sadece Telegram devre dışı kalır.
+
+> Not: Telegram tokenını kaynak koduna koymayın; Railway Variables kullanın.

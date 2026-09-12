@@ -7,6 +7,7 @@ import config as cfg
 from indicators import add_indicators
 from strategy import long_signal, short_signal
 from dashboard import start_dashboard
+from telegram_notifier import send_message, entry_message, exit_message, daily_report
 import threading
 
 STATE_FILE = os.environ.get('PAPER_STATE_FILE', 'paper_state.json')
@@ -37,7 +38,7 @@ def load_state():
         return {'equity': STARTING_EQUITY, 'position': None, 'last_closed_time': None, 'last_processed_entry_time': None, 'market_prices': {}, 'signals': {}, 'last_heartbeat': None}
     with open(STATE_FILE, 'r', encoding='utf-8') as f:
         s=json.load(f)
-    s.setdefault('market_prices', {}); s.setdefault('signals', {}); s.setdefault('last_heartbeat', None)
+    s.setdefault('market_prices', {}); s.setdefault('signals', {}); s.setdefault('last_heartbeat', None); s.setdefault('last_daily_report_date', None)
     return s
 
 
@@ -87,6 +88,7 @@ def enter(state, position, price, signal_row, now):
     }
     state['equity'] -= state['position']['entry_fee']
     save_state(state)
+    send_message(entry_message(state['position']))
     print(f"PAPER ENTRY | {side} {symbol} | price={price:.4f} | ATR={atr:.4f} | SL={sl:.4f} | TP={tp:.4f}", flush=True)
 
 
@@ -109,6 +111,7 @@ def exit_position(state, raw_price, reason, event_time):
     }
     log_trade(trade)
     print(f"PAPER EXIT  | {side} {p['symbol']} | reason={reason} | price={price:.4f} | net={net:.2f} | equity={state['equity']:.2f}", flush=True)
+    send_message(exit_message(trade))
     state['position'] = None
     save_state(state)
 
@@ -176,6 +179,24 @@ def main():
             latest_closed_time = latest['close_time']
             now = datetime.now(timezone.utc)
             state['last_heartbeat'] = now.isoformat()
+            # Daily Telegram report at 09:00 Europe/Istanbul. If the service restarts after 09:00,
+            # send the missed report immediately, but never more than once per local calendar day.
+            from zoneinfo import ZoneInfo
+            tr_now = now.astimezone(ZoneInfo('Europe/Istanbul'))
+            report_date = tr_now.date().isoformat()
+            if tr_now.hour >= 9 and state.get('last_daily_report_date') != report_date:
+                # Read current trade history before sending the report.
+                report_trades = []
+                if os.path.exists(TRADES_FILE):
+                    try:
+                        report_trades = pd.read_csv(TRADES_FILE).fillna('').to_dict('records')
+                    except Exception:
+                        report_trades = []
+                msg = daily_report(state, report_trades, (tr_now.date()).isoformat())
+                if send_message(msg):
+                    state['last_daily_report_date'] = report_date
+                    save_state(state)
+                    print(f'TELEGRAM | daily report sent | {report_date} 09:00 Europe/Istanbul', flush=True)
             state['market_prices'] = {
                 'ETHUSDT': float(short_df.iloc[-1]['close']),
                 'ETHUSD_PERP': float(long_df.iloc[-1]['close'])
