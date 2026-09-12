@@ -1,4 +1,4 @@
-# TEST 21
+# TEST 20
 
 - Timeframe: 4h
 - Signal source: ETHUSDT Futures
@@ -20,3 +20,6 @@ Run on Railway SSH:
 `python backtest.py`
 
 Note: ETHUSD_PERP is Binance COIN-M. This backtest models a fixed 1 ETH economic exposure; actual live COIN-M order sizing must account for the contract size and inverse contract mechanics.
+
+
+TEST 22: Baz TEST 20. Long Stoch RSI koşulu: K, D'yi yukarı keser ve D > 30. Diğer parametreler değiştirilmemiştir.

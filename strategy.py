@@ -34,7 +34,7 @@ def long_signal(df, i, cfg):
     ):
         return False
 
-    if not (row["stoch_k"] > cfg.STOCH_LONG_THRESHOLD):
+    if not (row["stoch_d"] > cfg.STOCH_LONG_D_THRESHOLD):
         return False
 
     return True
