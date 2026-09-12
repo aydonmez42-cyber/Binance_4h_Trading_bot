@@ -42,7 +42,3 @@ TEST 26: TEST 25B baz alınmıştır. Yalnızca Long tarafına MACD(12,26,9) mom
 
 ## TEST 29
 TEST 26 baz alınmıştır. Tek değişiklik: Long ATR başlangıç stopu 3.0 ATR → 3.5 ATR. Short SL 1.5 ATR olarak sabittir.
-
-
-## TEST 31
-TEST 29 baz alınmıştır. TP 4.0 ATR → 5.0 ATR değiştirilmiştir. Diğer parametreler sabittir.

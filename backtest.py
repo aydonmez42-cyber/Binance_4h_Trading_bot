@@ -27,12 +27,12 @@ def build_exit_levels(side, entry_price, atr_value):
         if cfg.USE_ATR_SL:
             levels["stop_loss"] = entry_price - atr_value * cfg.ATR_SL_MULTIPLIER
         if cfg.USE_ATR_TP:
-            levels["take_profit"] = entry_price + atr_value * cfg.ATR_TP_MULTIPLIER
+            levels["take_profit"] = entry_price + atr_value * cfg.ATR_LONG_TP_MULTIPLIER
     else:
         if cfg.USE_ATR_SL:
             levels["stop_loss"] = entry_price + atr_value * cfg.ATR_SHORT_SL_MULTIPLIER
         if cfg.USE_ATR_TP:
-            levels["take_profit"] = entry_price - atr_value * cfg.ATR_TP_MULTIPLIER
+            levels["take_profit"] = entry_price - atr_value * cfg.ATR_SHORT_TP_MULTIPLIER
     levels["entry_atr"] = atr_value
     return levels
 
