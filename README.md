@@ -50,3 +50,6 @@ This is a controlled experiment. Do not optimize parameters until the baseline r
 - EMA50/EMA200 used as trend regime filter, not cross trigger
 - ATR SL 2x, ATR TP 4x, trailing activation 2x and distance 2x retained
 - ADX > 25 retained; DI remains removed
+
+
+TEST 13: ETHUSDT; Supertrend 10/5; Bollinger OFF; LONG ATR SL=2.0x; SHORT ATR SL=1.5x; TP=4.0x; trailing +2/2; other rules unchanged.
