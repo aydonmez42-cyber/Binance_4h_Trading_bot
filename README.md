@@ -32,3 +32,6 @@ TEST 24: TEST 23 baz alınmıştır. Long CCI eşiği +50'den +100'e çıkarılm
 
 
 TEST 25A: TEST 24 baz alınmıştır. Long ATR Stop Loss 2.0 -> 2.5 ATR olarak değiştirilmiştir. Short ATR SL 1.5 ATR olarak korunmuştur. Diğer parametreler aynıdır.
+
+
+TEST 25B: TEST 25A baz alınmıştır. Long ATR Stop Loss 2.5 -> 3.0 ATR olarak değiştirilmiştir. Short ATR SL 1.5 ATR olarak korunmuştur. Diğer parametreler aynıdır.
