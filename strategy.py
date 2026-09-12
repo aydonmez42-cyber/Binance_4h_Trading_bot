@@ -26,15 +26,6 @@ def long_signal(df, i, cfg):
     if cfg.USE_MACD_LONG_FILTER and not bool(row["macd_long_ok"]):
         return False
 
-    # TEST 27: Bollinger Bands Long filter. Price must be above the middle band.
-    # Optional slope filter requires the middle band to be rising versus the prior candle.
-    if cfg.USE_BB_LONG_FILTER:
-        if not (row["close"] > row["bb_mid"]):
-            return False
-        if cfg.USE_BB_LONG_MID_RISING:
-            if not (row["bb_mid"] > df.iloc[i - 1]["bb_mid"]):
-                return False
-
     if not recent_true(
         df["cci"] > cfg.CCI_LONG_THRESHOLD, i, cfg.CCI_VALID_BARS
     ):

@@ -1,3 +1,5 @@
+# TEST 26A - 1H timeframe
+
 # TEST 20
 
 - Timeframe: 4h
@@ -38,6 +40,3 @@ TEST 25B: TEST 25A baz alınmıştır. Long ATR Stop Loss 2.5 -> 3.0 ATR olarak 
 
 
 TEST 26: TEST 25B baz alınmıştır. Yalnızca Long tarafına MACD(12,26,9) momentum filtresi eklenmiştir: MACD line > Signal ve histogram > 0. Short tarafı değişmemiştir.
-
-
-TEST 26 ROBUSTNESS: Full history is downloaded once for indicator warm-up. Three independent fresh-$10,000 periods are tested: 2020-2022, 2023-2024, 2025-2026. Outputs: test26_robustness_summary.csv, test26_robustness_trades.csv, test26_robustness_equity.csv.
