@@ -35,3 +35,6 @@ TEST 25A: TEST 24 baz alınmıştır. Long ATR Stop Loss 2.0 -> 2.5 ATR olarak d
 
 
 TEST 25B: TEST 25A baz alınmıştır. Long ATR Stop Loss 2.5 -> 3.0 ATR olarak değiştirilmiştir. Short ATR SL 1.5 ATR olarak korunmuştur. Diğer parametreler aynıdır.
+
+
+TEST 26: TEST 25B baz alınmıştır. Yalnızca Long tarafına MACD(12,26,9) momentum filtresi eklenmiştir: MACD line > Signal ve histogram > 0. Short tarafı değişmemiştir.

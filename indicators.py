@@ -192,6 +192,14 @@ def add_indicators(df, cfg):
     out["cci"] = cci(out["high"], out["low"], out["close"], cfg.CCI_LENGTH)
     out["rsi"] = rsi(out["close"], cfg.RSI_LENGTH)
 
+    # MACD(12,26,9) for TEST 26
+    macd_fast = ema(out["close"], cfg.MACD_FAST_LENGTH)
+    macd_slow = ema(out["close"], cfg.MACD_SLOW_LENGTH)
+    out["macd_line"] = macd_fast - macd_slow
+    out["macd_signal"] = ema(out["macd_line"], cfg.MACD_SIGNAL_LENGTH)
+    out["macd_hist"] = out["macd_line"] - out["macd_signal"]
+    out["macd_long_ok"] = (out["macd_line"] > out["macd_signal"]) & (out["macd_hist"] > 0)
+
     out["stoch_k"], out["stoch_d"] = stoch_rsi(
         out["close"],
         cfg.STOCH_RSI_RSI_LENGTH,

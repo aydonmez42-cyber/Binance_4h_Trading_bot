@@ -71,3 +71,9 @@ EQUITY_CSV = "backtest_equity.csv"
 # TEST 16: Fixed 1 ETH. LONG executes on ETHUSDT; SHORT executes on ETHUSDC.
 # Signals/indicators are generated from ETHUSDT; execution/exits use the selected contract.
 # RSI short threshold remains <30 from TEST 15.
+
+# TEST 26 - MACD Long momentum filter
+MACD_FAST_LENGTH = 12
+MACD_SLOW_LENGTH = 26
+MACD_SIGNAL_LENGTH = 9
+USE_MACD_LONG_FILTER = True
