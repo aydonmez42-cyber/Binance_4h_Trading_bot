@@ -23,3 +23,6 @@ Note: ETHUSD_PERP is Binance COIN-M. This backtest models a fixed 1 ETH economic
 
 
 TEST 22: Baz TEST 20. Long Stoch RSI koşulu: K, D'yi yukarı keser ve D > 30. Diğer parametreler değiştirilmemiştir.
+
+
+TEST 23: TEST 22 baz alınmıştır. Long CCI koşulu +50 olarak korunmuş, CCI_VALID_BARS 3'ten 1'e indirilmiştir. Diğer parametreler değiştirilmemiştir.

@@ -35,7 +35,7 @@ STOCH_LONG_D_THRESHOLD = 30.0
 STOCH_SHORT_THRESHOLD = 80
 
 # Historical condition validity
-CCI_VALID_BARS = 3
+CCI_VALID_BARS = 1
 STOCH_VALID_BARS = 3
 
 # ATR risk / exit model
