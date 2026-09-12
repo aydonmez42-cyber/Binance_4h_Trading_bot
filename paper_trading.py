@@ -6,6 +6,8 @@ import pandas as pd
 import config as cfg
 from indicators import add_indicators
 from strategy import long_signal, short_signal
+from dashboard import start_dashboard
+import threading
 
 STATE_FILE = os.environ.get('PAPER_STATE_FILE', 'paper_state.json')
 TRADES_FILE = os.environ.get('PAPER_TRADES_FILE', 'paper_trades.csv')
@@ -32,9 +34,11 @@ def fetch(symbol, market_type, limit=250):
 
 def load_state():
     if not os.path.exists(STATE_FILE):
-        return {'equity': STARTING_EQUITY, 'position': None, 'last_closed_time': None, 'last_processed_entry_time': None}
+        return {'equity': STARTING_EQUITY, 'position': None, 'last_closed_time': None, 'last_processed_entry_time': None, 'market_prices': {}, 'signals': {}, 'last_heartbeat': None}
     with open(STATE_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        s=json.load(f)
+    s.setdefault('market_prices', {}); s.setdefault('signals', {}); s.setdefault('last_heartbeat', None)
+    return s
 
 
 def save_state(s):
@@ -158,6 +162,7 @@ def process_intrabar(state, long_candle, short_candle, now):
 
 def main():
     print('TEST32 PAPER TRADING | REAL MARKET DATA | NO REAL ORDERS', flush=True)
+    threading.Thread(target=start_dashboard, daemon=True).start()
     state = load_state()
     while True:
         try:
@@ -170,6 +175,27 @@ def main():
             latest = enriched.iloc[-1]
             latest_closed_time = latest['close_time']
             now = datetime.now(timezone.utc)
+            state['last_heartbeat'] = now.isoformat()
+            state['market_prices'] = {
+                'ETHUSDT': float(short_df.iloc[-1]['close']),
+                'ETHUSD_PERP': float(long_df.iloc[-1]['close'])
+            }
+            state['market_price_time'] = now.isoformat()
+            def fmt(v):
+                try:
+                    x=float(v)
+                    return round(x,4)
+                except Exception:
+                    return None
+            state['signals'] = {
+                'ema': 'BULLISH' if float(latest.get('ema_fast',0)) > float(latest.get('ema_slow',0)) else 'BEARISH',
+                'supertrend': 'BULLISH' if bool(latest.get('supertrend_direction', False)) else 'BEARISH',
+                'adx': fmt(latest.get('adx')), 'rsi': fmt(latest.get('rsi')),
+                'cci': fmt(latest.get('cci')), 'stoch': 'K/D loaded',
+                'macd': 'BULLISH' if float(latest.get('macd',0)) > float(latest.get('macd_signal',0)) and float(latest.get('macd_hist',0)) > 0 else 'BEARISH',
+                'final': 'LONG' if long_signal(enriched, len(enriched)-1, cfg) else ('SHORT' if short_signal(enriched, len(enriched)-1, cfg) else 'NONE')
+            }
+            save_state(state)
 
             # Manage current position using the live execution candle first.
             if state['position']:
