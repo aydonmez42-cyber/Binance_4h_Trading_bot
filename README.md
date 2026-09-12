@@ -1,4 +1,4 @@
-# TEST 19
+# TEST 20
 
 - Timeframe: 4h
 - Signal source: ETHUSDT Futures
