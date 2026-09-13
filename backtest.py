@@ -4,7 +4,8 @@ import pandas as pd
 import config as cfg
 from data_manager import fetch_klines
 from indicators import add_indicators
-from strategy import long_signal, short_signal, exit_signal, supertrend_exit_signal
+from strategy import long_signal, short_signal, exit_signal
+from regime import add_daily_regime_indicators, apply_regime_hysteresis
 
 
 def execution_price(price, side, is_entry, slippage):
@@ -101,7 +102,6 @@ def run_backtest(signal_df, long_df, short_df):
     exit_levels = None
     pending_entry = None
     pending_ema_exit = False
-    pending_st_exit = False
     trades, equity_curve = [], []
 
     for i in range(len(common)):
@@ -110,14 +110,6 @@ def run_backtest(signal_df, long_df, short_df):
         long_row = long_map.loc[t]
         short_row = short_map.loc[t]
         exec_row = long_row if position == "LONG" or (pending_entry and pending_entry["side"] == "LONG") else short_row
-
-        if pending_st_exit and position is not None:
-            exec_row = long_row if position == "LONG" else short_row
-            px = execution_price(float(exec_row["open"]), position, False, cfg.SLIPPAGE_RATE)
-            tr = exec_row.copy(); tr["entry_time_for_trade"] = entry_time
-            trade, equity = close_position(position, px, tr, entry_price, entry_fee, "SUPERTREND_EXIT", equity)
-            trades.append(trade)
-            position = entry_price = entry_time = None; entry_fee = 0.0; exit_levels = None; pending_st_exit = False
 
         if pending_ema_exit and position is not None:
             exec_row = long_row if position == "LONG" else short_row
@@ -164,12 +156,9 @@ def run_backtest(signal_df, long_df, short_df):
             else: marked_equity += (entry_price - float(short_row["close"])) * cfg.POSITION_QTY_ETH
         equity_curve.append({"time": sig["close_time"], "equity": marked_equity, "position": position or "FLAT"})
 
-        if i < len(common) - 1 and position is not None:
-            if supertrend_exit_signal(common, i, position):
-                pending_st_exit = True
-            elif cfg.USE_EMA100_EXIT and exit_signal(position, sig):
-                pending_ema_exit = True
-        if i < len(common) - 1 and position is None and pending_entry is None and not pending_st_exit:
+        if i < len(common) - 1 and position is not None and cfg.USE_EMA100_EXIT and exit_signal(position, sig):
+            pending_ema_exit = True
+        if i < len(common) - 1 and position is None and pending_entry is None:
             if long_signal(common, i, cfg): pending_entry = {"side": "LONG", "atr": float(sig["atr"])}
             elif short_signal(common, i, cfg): pending_entry = {"side": "SHORT", "atr": float(sig["atr"])}
 
@@ -206,10 +195,26 @@ def calculate_metrics(trades, equity_curve):
 def main():
     print(f"Downloading Futures data: {cfg.LONG_SYMBOL} / {cfg.SHORT_SYMBOL} {cfg.INTERVAL}...")
     signal_df = fetch_klines(cfg.SIGNAL_SYMBOL, cfg.INTERVAL, cfg.DATA_START, cfg.DATA_END)
+    daily_df = fetch_klines(cfg.SIGNAL_SYMBOL, cfg.REGIME_TIMEFRAME, cfg.DATA_START, cfg.DATA_END)
     long_df = fetch_klines(cfg.LONG_SYMBOL, cfg.INTERVAL, cfg.DATA_START, cfg.DATA_END, market_type="COIN_M")
     short_df = fetch_klines(cfg.SHORT_SYMBOL, cfg.INTERVAL, cfg.DATA_START, cfg.DATA_END, market_type="USD_M")
-    print(f"Rows: signal={len(signal_df):,}, long={len(long_df):,}, short={len(short_df):,}")
+    print(f"Rows: signal={len(signal_df):,}, daily={len(daily_df):,}, long={len(long_df):,}, short={len(short_df):,}")
     signal_df = add_indicators(signal_df, cfg)
+
+    # TEST35: build the 1D regime only from closed daily candles, then map the
+    # latest available daily regime onto each closed 4H signal candle.
+    daily_df = add_daily_regime_indicators(daily_df, cfg)
+    daily_df = apply_regime_hysteresis(daily_df, cfg)
+    regime_cols = ["open_time", "regime", "bias_1d", "regime_candidate"]
+    signal_df = pd.merge_asof(
+        signal_df.sort_values("open_time"),
+        daily_df[regime_cols].sort_values("open_time"),
+        on="open_time",
+        direction="backward",
+        allow_exact_matches=True,
+    )
+    print("TEST 35 | TEST32 + 1D Regime Filter | 4H signal/execution unchanged")
+    print("Regime counts:", signal_df["regime"].value_counts(dropna=False).to_dict())
     print(f"TEST 17 | Fixed {cfg.POSITION_QTY_ETH} ETH | LONG ETHUSD (COIN-M) | SHORT ETHUSDT (USD-M) | RSI long > {cfg.RSI_LONG_THRESHOLD} | RSI short < {cfg.RSI_SHORT_THRESHOLD}")
     trades, equity_curve, final_equity = run_backtest(signal_df, long_df, short_df)
     metrics = calculate_metrics(trades, equity_curve)

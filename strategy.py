@@ -12,6 +12,10 @@ def long_signal(df, i, cfg):
     if i < 1:
         return False
 
+    # TEST35: 1D regime is a hard directional permission filter.
+    if cfg.USE_1D_REGIME_FILTER and row.get("bias_1d", "NONE") != "LONG":
+        return False
+
     # EMA50/EMA200 define the main trend regime; Supertrend is the trend filter.
     if not (row["close"] > row["ema100"]):
         return False
@@ -48,6 +52,10 @@ def short_signal(df, i, cfg):
     if i < 1:
         return False
 
+    # TEST35: 1D regime is a hard directional permission filter.
+    if cfg.USE_1D_REGIME_FILTER and row.get("bias_1d", "NONE") != "SHORT":
+        return False
+
     if not (row["close"] < row["ema100"]):
         return False
     if not (row["ema50"] < row["ema100"]):
@@ -78,23 +86,6 @@ def short_signal(df, i, cfg):
         return False
 
     return True
-
-
-def supertrend_exit_signal(df, i, position):
-    """Candle-close Supertrend reversal. Signal is evaluated on closed bars.
-    Execution is handled by the backtest on the next candle open.
-    """
-    if i < 1:
-        return False
-    prev = df.iloc[i - 1]
-    row = df.iloc[i]
-    if position == "LONG":
-        return (float(prev["close"]) >= float(prev["supertrend"]) and
-                float(row["close"]) < float(row["supertrend"]))
-    if position == "SHORT":
-        return (float(prev["close"]) <= float(prev["supertrend"]) and
-                float(row["close"]) > float(row["supertrend"]))
-    return False
 
 
 def exit_signal(position, row):

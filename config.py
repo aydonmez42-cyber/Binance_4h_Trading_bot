@@ -64,6 +64,17 @@ SLIPPAGE_RATE = 0.0002       # 0.02% assumed execution slippage
 DATA_START = "2020-01-01"
 DATA_END = None              # e.g. "2026-09-01"
 
+# TEST 35: 1D regime filter
+REGIME_TIMEFRAME = "1d"
+REGIME_EMA_FAST = 50
+REGIME_EMA_SLOW = 200
+REGIME_ADX_THRESHOLD = 25
+REGIME_ATRP_PCTL_WINDOW = 365
+REGIME_ATRP_PCTL_HIGH = 90.0
+REGIME_ATRP_PCTL_LOW = 10.0
+REGIME_HYSTERESIS_BARS = 2
+USE_1D_REGIME_FILTER = True
+
 # Output
 TRADES_CSV = "backtest_trades.csv"
 EQUITY_CSV = "backtest_equity.csv"
