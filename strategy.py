@@ -6,6 +6,25 @@ def recent_true(series, current_pos, max_bars):
     return bool(window.fillna(False).any())
 
 
+def fomo_blocked(df, i, cfg):
+    """TEST37 FOMO veto on the fixed 4H decision timeframe.
+
+    The rule-set definition is abs(C[TF_E,0]-C[TF_E,1]) > 3*ATR(TF_E,1).
+    Because this project is intentionally fixed at 4H, TF_E is mapped to 4H.
+    Only closed bars are used: current signal close vs previous close, with
+    ATR from the previous closed bar.
+    """
+    if not getattr(cfg, "USE_FOMO_FILTER", False):
+        return False
+    if i < 1:
+        return False
+    atr_prev = df.iloc[i - 1].get("atr")
+    if pd.isna(atr_prev) or float(atr_prev) <= 0:
+        return False
+    move = abs(float(df.iloc[i]["close"]) - float(df.iloc[i - 1]["close"]))
+    return move > float(cfg.FOMO_ATR_MULTIPLE) * float(atr_prev)
+
+
 def long_signal(df, i, cfg):
     row = df.iloc[i]
 
@@ -16,6 +35,8 @@ def long_signal(df, i, cfg):
     if cfg.USE_1D_REGIME_FILTER and row.get("bias_1d", "NONE") != "LONG":
         return False
     if cfg.USE_MARKET_STRUCTURE and row.get("structure_bias", "NONE") != "LONG":
+        return False
+    if fomo_blocked(df, i, cfg):
         return False
 
     # EMA50/EMA200 define the main trend regime; Supertrend is the trend filter.
@@ -58,6 +79,8 @@ def short_signal(df, i, cfg):
     if cfg.USE_1D_REGIME_FILTER and row.get("bias_1d", "NONE") != "SHORT":
         return False
     if cfg.USE_MARKET_STRUCTURE and row.get("structure_bias", "NONE") != "SHORT":
+        return False
+    if fomo_blocked(df, i, cfg):
         return False
 
     if not (row["close"] < row["ema100"]):

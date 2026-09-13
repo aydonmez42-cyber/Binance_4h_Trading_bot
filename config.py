@@ -80,6 +80,12 @@ MARKET_STRUCTURE_LEFT_BARS = 5
 MARKET_STRUCTURE_RIGHT_BARS = 5
 USE_MARKET_STRUCTURE = True
 
+# TEST37: FOMO extension veto adapted to the project's fixed 4H decision timeframe.
+# A new entry is blocked when the latest closed 4H candle moved more than
+# 3 x the previous closed 4H ATR.
+FOMO_ATR_MULTIPLE = 3.0
+USE_FOMO_FILTER = True
+
 # Output
 TRADES_CSV = "backtest_trades.csv"
 EQUITY_CSV = "backtest_equity.csv"
