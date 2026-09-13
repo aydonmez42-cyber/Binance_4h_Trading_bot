@@ -1,3 +1,4 @@
+import html
 import os
 import requests
 
@@ -6,37 +7,76 @@ TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '').strip()
 TELEGRAM_ENABLED = bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)
 
 
-def send_message(text: str) -> bool:
-    """Send a Telegram message. Returns False silently if not configured."""
+def _api(method: str, payload=None, timeout=15):
+    url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/{method}'
+    return requests.post(url, json=payload or {}, timeout=timeout)
+
+
+def verify_connection() -> bool:
+    """Verify token and chat ID without ever logging the secret token."""
     if not TELEGRAM_ENABLED:
-        print('TELEGRAM | not configured (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)', flush=True)
+        print('TELEGRAM | disabled | set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID', flush=True)
         return False
-    url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
     try:
-        r = requests.post(
-            url,
-            json={'chat_id': TELEGRAM_CHAT_ID, 'text': text, 'parse_mode': 'HTML'},
-            timeout=15,
-        )
-        r.raise_for_status()
+        r = _api('getMe', timeout=10)
+        if r.status_code != 200:
+            print(f'TELEGRAM | getMe ERROR | HTTP {r.status_code} | {r.text[:300]}', flush=True)
+            return False
         data = r.json()
         if not data.get('ok'):
-            raise RuntimeError(data)
-        return True
+            print(f'TELEGRAM | getMe ERROR | {data}', flush=True)
+            return False
+        bot = data.get('result', {})
+        print(f'TELEGRAM | token OK | bot=@{bot.get("username", "unknown")}', flush=True)
+
+        # Validate the exact chat_id by sending a harmless connection test.
+        return send_message(
+            '🟢 TEST32 PAPER — TELEGRAM BAĞLANTISI BAŞARILI\n\n'
+            'Paper Trading aktif.\n'
+            'Gerçek emir: KAPALI\n'
+            'Dashboard: AKTİF'
+        )
+    except requests.RequestException as e:
+        print(f'TELEGRAM | connection ERROR | {type(e).__name__} | {e}', flush=True)
+        return False
     except Exception as e:
-        print(f'TELEGRAM ERROR | {type(e).__name__}: {e}', flush=True)
+        print(f'TELEGRAM | connection ERROR | {type(e).__name__} | {e}', flush=True)
+        return False
+
+
+def send_message(text: str) -> bool:
+    if not TELEGRAM_ENABLED:
+        print('TELEGRAM | not configured', flush=True)
+        return False
+    try:
+        # No parse_mode: avoids 400 errors caused by malformed HTML/Markdown.
+        r = _api('sendMessage', {'chat_id': TELEGRAM_CHAT_ID, 'text': text}, timeout=15)
+        if r.status_code != 200:
+            print(f'TELEGRAM | send ERROR | HTTP {r.status_code} | {r.text[:500]}', flush=True)
+            return False
+        data = r.json()
+        if not data.get('ok'):
+            print(f'TELEGRAM | send ERROR | {data}', flush=True)
+            return False
+        print('TELEGRAM | message sent', flush=True)
+        return True
+    except requests.RequestException as e:
+        print(f'TELEGRAM | send ERROR | {type(e).__name__} | {e}', flush=True)
+        return False
+    except Exception as e:
+        print(f'TELEGRAM | send ERROR | {type(e).__name__} | {e}', flush=True)
         return False
 
 
 def entry_message(p: dict) -> str:
     side_emoji = '🟢' if p['side'] == 'LONG' else '🔴'
     return (
-        f'{side_emoji} <b>TEST32 PAPER — YENİ POZİSYON</b>\n\n'
-        f'<b>{p["side"]}</b> {p["symbol"]}\n'
-        f'Giriş: <b>{p["entry_price"]:,.2f}</b>\n'
+        f'{side_emoji} TEST32 PAPER — YENİ POZİSYON\n\n'
+        f'{p["side"]} {p["symbol"]}\n'
+        f'Giriş: {p["entry_price"]:,.2f}\n'
         f'ATR: {p["atr"]:,.2f}\n'
-        f'SL: <b>{p["sl"]:,.2f}</b>\n'
-        f'TP: <b>{p["tp"]:,.2f}</b>\n'
+        f'SL: {p["sl"]:,.2f}\n'
+        f'TP: {p["tp"]:,.2f}\n'
         f'Miktar: {p["qty_eth"]:.2f} ETH\n'
         f'Sinyal: {p["signal_time"]}'
     )
@@ -46,20 +86,19 @@ def exit_message(t: dict) -> str:
     positive = float(t['net_pnl']) >= 0
     emoji = '✅' if positive else '❌'
     return (
-        f'{emoji} <b>TEST32 PAPER — POZİSYON KAPANDI</b>\n\n'
-        f'<b>{t["side"]}</b> {t["symbol"]}\n'
+        f'{emoji} TEST32 PAPER — POZİSYON KAPANDI\n\n'
+        f'{t["side"]} {t["symbol"]}\n'
         f'Giriş: {float(t["entry_price"]):,.2f}\n'
-        f'Çıkış: <b>{float(t["exit_price"]):,.2f}</b>\n'
-        f'Net P&L: <b>{float(t["net_pnl"]):+,.2f} $</b>\n'
+        f'Çıkış: {float(t["exit_price"]):,.2f}\n'
+        f'Net P&L: {float(t["net_pnl"]):+,.2f} $\n'
         f'Ücretler: {float(t["fees"]):,.2f} $\n'
-        f'Çıkış nedeni: <b>{t["reason"]}</b>\n'
+        f'Çıkış nedeni: {t["reason"]}\n'
         f'Süre: {t.get("entry_time", "-")} → {t.get("exit_time", "-")}\n'
-        f'Sanal bakiye: <b>{float(t["equity_after"]):,.2f} $</b>'
+        f'Sanal bakiye: {float(t["equity_after"]):,.2f} $'
     )
 
 
 def daily_report(state: dict, trades: list, report_date: str) -> str:
-    # At 09:00 Europe/Istanbul, report trades closed during the previous local calendar day.
     from datetime import datetime, timedelta
     from zoneinfo import ZoneInfo
     local_date = datetime.fromisoformat(report_date).date()
@@ -83,29 +122,20 @@ def daily_report(state: dict, trades: list, report_date: str) -> str:
     equity = float(state.get('equity', start))
     pos = state.get('position')
     lines = [
-        '📊 <b>TEST32 PAPER — GÜNLÜK RAPOR</b>',
-        f'Rapor saati: <b>09:00 Europe/Istanbul</b> | Gün: <b>{previous_date}</b>',
+        '📊 TEST32 PAPER — GÜNLÜK RAPOR',
+        f'Rapor saati: 09:00 Europe/Istanbul | Gün: {previous_date}',
         '',
-        f'<b>Önceki gün:</b> {len(day_trades)} işlem | {wins}W / {losses}L | P&L <b>{day_pnl:+,.2f} $</b>',
-        f'<b>Toplam:</b> {len(trades)} işlem | P&L <b>{all_pnl:+,.2f} $</b>',
-        f'<b>Sanal bakiye:</b> {equity:,.2f} $',
-        f'<b>Getiri:</b> {(equity/start-1)*100:+.2f}%',
+        f'Önceki gün: {len(day_trades)} işlem | {wins}W / {losses}L | P&L {day_pnl:+,.2f} $',
+        f'Toplam: {len(trades)} işlem | P&L {all_pnl:+,.2f} $',
+        f'Sanal bakiye: {equity:,.2f} $',
+        f'Getiri: {(equity/start-1)*100:+.2f}%',
     ]
     if pos:
-        side = pos['side']
-        symbol = pos['symbol']
-        entry = float(pos['entry_price'])
-        cp = float(state.get('market_prices', {}).get(symbol, entry))
-        qty = float(pos.get('qty_eth', 1))
+        side = pos['side']; symbol = pos['symbol']; entry = float(pos['entry_price'])
+        cp = float(state.get('market_prices', {}).get(symbol, entry)); qty = float(pos.get('qty_eth', 1))
         unreal = (cp-entry)*qty if side == 'LONG' else (entry-cp)*qty
         active_stop = float(pos.get('trail_stop')) if pos.get('trail_active') and pos.get('trail_stop') is not None else float(pos['sl'])
-        lines += [
-            '',
-            f'📌 <b>Açık pozisyon:</b> {side} {symbol}',
-            f'Giriş {entry:,.2f} | Güncel {cp:,.2f}',
-            f'Unrealized P&L: <b>{unreal:+,.2f} $</b>',
-            f'SL {active_stop:,.2f} | TP {float(pos["tp"]):,.2f}',
-        ]
+        lines += ['', f'📌 Açık pozisyon: {side} {symbol}', f'Giriş {entry:,.2f} | Güncel {cp:,.2f}', f'Unrealized P&L: {unreal:+,.2f} $', f'SL {active_stop:,.2f} | TP {float(pos["tp"]):,.2f}']
     else:
-        lines += ['', '📌 <b>Açık pozisyon:</b> FLAT']
+        lines += ['', '📌 Açık pozisyon: FLAT']
     return '\n'.join(lines)

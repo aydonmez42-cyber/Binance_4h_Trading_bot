@@ -7,11 +7,14 @@ import config as cfg
 from indicators import add_indicators
 from strategy import long_signal, short_signal
 from dashboard import start_dashboard
-from telegram_notifier import send_message, entry_message, exit_message, daily_report
+from telegram_notifier import send_message, entry_message, exit_message, daily_report, verify_connection
 import threading
 
-STATE_FILE = os.environ.get('PAPER_STATE_FILE', 'paper_state.json')
-TRADES_FILE = os.environ.get('PAPER_TRADES_FILE', 'paper_trades.csv')
+DATA_DIR = os.environ.get('PAPER_DATA_DIR', '')
+if DATA_DIR:
+    os.makedirs(DATA_DIR, exist_ok=True)
+STATE_FILE = os.environ.get('PAPER_STATE_FILE', os.path.join(DATA_DIR, 'paper_state.json') if DATA_DIR else 'paper_state.json')
+TRADES_FILE = os.environ.get('PAPER_TRADES_FILE', os.path.join(DATA_DIR, 'paper_trades.csv') if DATA_DIR else 'paper_trades.csv')
 POLL_SECONDS = int(os.environ.get('POLL_SECONDS', '30'))
 STARTING_EQUITY = float(os.environ.get('PAPER_INITIAL_CAPITAL', str(cfg.INITIAL_CAPITAL)))
 
@@ -167,6 +170,15 @@ def main():
     print('TEST32 PAPER TRADING | REAL MARKET DATA | NO REAL ORDERS', flush=True)
     threading.Thread(target=start_dashboard, daemon=True).start()
     state = load_state()
+    if state.get('position'):
+        p = state['position']
+        print(f'STATE RESTORED | position={p.get("side")} {p.get("symbol")} | entry={float(p.get("entry_price", 0)):.4f} | equity={float(state.get("equity", STARTING_EQUITY)):.2f}', flush=True)
+    else:
+        print(f'STATE RESTORED | position=FLAT | equity={float(state.get("equity", STARTING_EQUITY)):.2f}', flush=True)
+    if os.environ.get('TELEGRAM_VERIFY_ON_START', 'true').strip().lower() in ('1','true','yes','on') and not state.get('telegram_verified_once'):
+        if verify_connection():
+            state['telegram_verified_once'] = True
+            save_state(state)
     while True:
         try:
             signal_df = fetch(cfg.SIGNAL_SYMBOL, 'USD_M', 300)
