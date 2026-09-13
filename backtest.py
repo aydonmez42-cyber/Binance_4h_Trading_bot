@@ -5,8 +5,6 @@ import config as cfg
 from data_manager import fetch_klines
 from indicators import add_indicators
 from strategy import long_signal, short_signal, exit_signal
-from regime import add_daily_regime_indicators, apply_regime_hysteresis
-from market_structure import add_market_structure
 
 
 def execution_price(price, side, is_entry, slippage):
@@ -196,34 +194,10 @@ def calculate_metrics(trades, equity_curve):
 def main():
     print(f"Downloading Futures data: {cfg.LONG_SYMBOL} / {cfg.SHORT_SYMBOL} {cfg.INTERVAL}...")
     signal_df = fetch_klines(cfg.SIGNAL_SYMBOL, cfg.INTERVAL, cfg.DATA_START, cfg.DATA_END)
-    daily_df = fetch_klines(cfg.SIGNAL_SYMBOL, cfg.REGIME_TIMEFRAME, cfg.DATA_START, cfg.DATA_END)
     long_df = fetch_klines(cfg.LONG_SYMBOL, cfg.INTERVAL, cfg.DATA_START, cfg.DATA_END, market_type="COIN_M")
     short_df = fetch_klines(cfg.SHORT_SYMBOL, cfg.INTERVAL, cfg.DATA_START, cfg.DATA_END, market_type="USD_M")
-    print(f"Rows: signal={len(signal_df):,}, daily={len(daily_df):,}, long={len(long_df):,}, short={len(short_df):,}")
+    print(f"Rows: signal={len(signal_df):,}, long={len(long_df):,}, short={len(short_df):,}")
     signal_df = add_indicators(signal_df, cfg)
-
-    # TEST36: confirmed 5-left / 5-right 4H market structure.
-    signal_df = add_market_structure(
-        signal_df,
-        left=cfg.MARKET_STRUCTURE_LEFT_BARS,
-        right=cfg.MARKET_STRUCTURE_RIGHT_BARS,
-    )
-
-    # TEST35: build the 1D regime only from closed daily candles, then map the
-    # latest available daily regime onto each closed 4H signal candle.
-    daily_df = add_daily_regime_indicators(daily_df, cfg)
-    daily_df = apply_regime_hysteresis(daily_df, cfg)
-    regime_cols = ["open_time", "regime", "bias_1d", "regime_candidate"]
-    signal_df = pd.merge_asof(
-        signal_df.sort_values("open_time"),
-        daily_df[regime_cols].sort_values("open_time"),
-        on="open_time",
-        direction="backward",
-        allow_exact_matches=True,
-    )
-    print("TEST 36 | TEST32 + 1D Regime Filter + 4H Market Structure | 4H signal/execution unchanged")
-    print("Structure counts:", signal_df["structure_bias"].value_counts(dropna=False).to_dict())
-    print("Regime counts:", signal_df["regime"].value_counts(dropna=False).to_dict())
     print(f"TEST 17 | Fixed {cfg.POSITION_QTY_ETH} ETH | LONG ETHUSD (COIN-M) | SHORT ETHUSDT (USD-M) | RSI long > {cfg.RSI_LONG_THRESHOLD} | RSI short < {cfg.RSI_SHORT_THRESHOLD}")
     trades, equity_curve, final_equity = run_backtest(signal_df, long_df, short_df)
     metrics = calculate_metrics(trades, equity_curve)

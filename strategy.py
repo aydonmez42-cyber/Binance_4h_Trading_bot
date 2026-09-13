@@ -12,16 +12,6 @@ def long_signal(df, i, cfg):
     if i < 1:
         return False
 
-    # TEST36: 1D regime + confirmed 4H market structure are hard entry filters.
-    if cfg.USE_1D_REGIME_FILTER and row.get("bias_1d", "NONE") != "LONG":
-        return False
-    if cfg.USE_MARKET_STRUCTURE and row.get("structure_bias", "NONE") != "LONG":
-        return False
-
-    # TEST38: volume must be confirmed on the 4H signal candle.
-    if cfg.USE_VOLUME_FILTER and not (row["volume_ratio"] >= cfg.VOLUME_RATIO_MIN):
-        return False
-
     # EMA50/EMA200 define the main trend regime; Supertrend is the trend filter.
     if not (row["close"] > row["ema100"]):
         return False
@@ -56,16 +46,6 @@ def short_signal(df, i, cfg):
     row = df.iloc[i]
 
     if i < 1:
-        return False
-
-    # TEST36: 1D regime + confirmed 4H market structure are hard entry filters.
-    if cfg.USE_1D_REGIME_FILTER and row.get("bias_1d", "NONE") != "SHORT":
-        return False
-    if cfg.USE_MARKET_STRUCTURE and row.get("structure_bias", "NONE") != "SHORT":
-        return False
-
-    # TEST38: volume must be confirmed on the 4H signal candle.
-    if cfg.USE_VOLUME_FILTER and not (row["volume_ratio"] >= cfg.VOLUME_RATIO_MIN):
         return False
 
     if not (row["close"] < row["ema100"]):
