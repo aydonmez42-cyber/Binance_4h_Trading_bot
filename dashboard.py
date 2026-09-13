@@ -1,6 +1,7 @@
 import csv, json, os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
+from scanner import get_markets, scan_symbols
 
 STATE_FILE = os.environ.get('PAPER_STATE_FILE', 'paper_state.json')
 TRADES_FILE = os.environ.get('PAPER_TRADES_FILE', 'paper_trades.csv')
@@ -14,7 +15,7 @@ HTML = r'''<!doctype html>
 header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}h1{font-size:24px;margin:0}.sub{color:#94a0ba;font-size:13px;margin-top:4px}.status{padding:8px 12px;border-radius:999px;background:#143d2a;color:#72e2a4;font-size:12px;font-weight:700}
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}.card{background:#121a2d;border:1px solid #202b45;border-radius:14px;padding:15px}.label{color:#8e9ab4;font-size:12px}.value{font-size:23px;font-weight:750;margin-top:5px}.small{font-size:12px;color:#9ba7bf;margin-top:5px}.green{color:#65e3a1}.red{color:#ff7f8c}.yellow{color:#f6cc6d}
 .section{margin-top:12px}.section h2{font-size:16px;margin:0 0 10px}.cols{display:grid;grid-template-columns:1.1fr .9fr;gap:12px}.pos{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.pill{display:inline-block;padding:5px 8px;border-radius:7px;font-size:12px;font-weight:700}.long{background:#143d2a;color:#72e2a4}.short{background:#48202b;color:#ff8b98}.flat{background:#27324b;color:#b8c1d6}
-table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:9px;border-bottom:1px solid #202b45}th{color:#8e9ab4;font-weight:600} .bar{height:10px;background:#202b45;border-radius:8px;overflow:hidden}.bar>i{display:block;height:100%;background:#65e3a1;width:0}.reason{font-size:11px;color:#9ba7bf}.footer{color:#6f7b95;font-size:11px;margin-top:14px}
+table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:9px;border-bottom:1px solid #202b45}th{color:#8e9ab4;font-weight:600} .bar{height:10px;background:#202b45;border-radius:8px;overflow:hidden}.bar>i{display:block;height:100%;background:#65e3a1;width:0}.reason{font-size:11px;color:#9ba7bf}.footer{color:#6f7b95;font-size:11px;margin-top:14px}.scannerbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.scannerbar input{flex:1;min-width:180px;background:#0b1020;border:1px solid #2a3755;color:#e8ecf7;border-radius:8px;padding:10px}.btn{background:#243454;color:#e8ecf7;border:1px solid #35476d;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer}.btn.primary{background:#174d3a}.btn:disabled{opacity:.5;cursor:wait}.market-table{max-height:520px;overflow:auto}.signal-long{color:#65e3a1;font-weight:800}.signal-short{color:#ff7f8c;font-weight:800}.signal-none{color:#8e9ab4}.muted{color:#8e9ab4}.tag{display:inline-block;padding:3px 6px;border-radius:6px;background:#202b45;font-size:11px}.scan-results{margin-top:12px}.checkcell{width:35px}.scanner-status{font-size:12px;color:#9ba7bf}
 @media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.cols{grid-template-columns:1fr}}@media(max-width:600px){.wrap{padding:12px}.grid{grid-template-columns:1fr 1fr}.pos{grid-template-columns:1fr 1fr}.value{font-size:18px}header{align-items:flex-start}}
 </style></head><body><div class="wrap">
 <header><div><h1>TEST32 Paper Trading</h1><div class="sub">ETH 4H • REAL MARKET DATA • NO REAL ORDERS</div></div><div class="status" id="status">● BAĞLANIYOR</div></header>
@@ -34,6 +35,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;p
 <div class="card"><div class="label">Max Drawdown</div><div class="value" id="dd">—</div></div>
 <div class="card"><div class="label">Son Mum</div><div class="value" id="candle">—</div></div>
 </div>
+<div class="card section"><h2>🔎 TEST32 Coin Scanner</h2><div class="small">Binance USDT-M Perpetual • 4H • Sadece tarama, otomatik işlem yok.</div><div class="scannerbar" style="margin-top:10px"><input id="coinSearch" placeholder="Coin ara: ETH, BTC, SOL..."><button class="btn" onclick="loadMarkets()">↻ Yenile</button><button class="btn primary" id="scanSelected" onclick="scanSelectedCoins()">🔍 Seçilenleri Tara</button><button class="btn" id="scanAll" onclick="scanAllCoins()">⚡ Tümünü Tara</button></div><div class="scanner-status" id="scannerStatus" style="margin-top:8px">Coin listesi yükleniyor...</div><div class="market-table" style="margin-top:8px"><table><thead><tr><th class="checkcell"><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th><th>Coin</th><th>Fiyat</th><th>24h</th><th>Hacim</th><th>Tarama</th></tr></thead><tbody id="marketList"></tbody></table></div><div class="scan-results"><h2 style="margin-top:14px">📡 Tarama Sonuçları</h2><div style="overflow:auto"><table><thead><tr><th>Coin</th><th>Sinyal</th><th>Fiyat</th><th>Supertrend</th><th>ADX</th><th>RSI</th><th>CCI</th><th>MACD</th></tr></thead><tbody id="scanResults"><tr><td colspan="8" class="muted">Henüz tarama yapılmadı.</td></tr></tbody></table></div></div></div>
 <div class="card section"><h2>📜 Son İşlemler</h2><div style="overflow:auto"><table><thead><tr><th>Tarih</th><th>Yön</th><th>Sembol</th><th>Entry</th><th>Exit</th><th>P&L</th><th>Çıkış</th></tr></thead><tbody id="history"></tbody></table></div></div>
 <div class="footer">Otomatik yenileme: 5 sn • Paper trading, gerçek emir yok.</div>
 </div>
@@ -54,7 +56,19 @@ function render(d){
  const s=d.signals||{}; document.getElementById('signals').innerHTML=`<table><tbody>${[['EMA 50 / 200',s.ema],['Supertrend',s.supertrend],['ADX',s.adx],['RSI',s.rsi],['CCI',s.cci],['Stoch RSI',s.stoch],['MACD',s.macd],['Son sinyal',s.final]].map(r=>`<tr><td>${r[0]}</td><td><b>${r[1]??'—'}</b></td></tr>`).join('')}</tbody></table>`;
  document.getElementById('history').innerHTML=d.history.map(t=>`<tr><td>${t.exit_time||'—'}</td><td><span class="pill ${String(t.side).toLowerCase()}">${t.side}</span></td><td>${t.symbol}</td><td>${num(t.entry_price)}</td><td>${num(t.exit_price)}</td><td class="${cls(t.net_pnl)}"><b>${money(t.net_pnl)}</b></td><td class="reason">${t.reason}</td></tr>`).join('') || '<tr><td colspan="7">Henüz kapanmış işlem yok.</td></tr>';
 }
-async function refresh(){try{let r=await fetch('/api/status',{cache:'no-store'});let d=await r.json();render(d)}catch(e){document.getElementById('status').textContent='● BAĞLANTI HATASI'}} refresh();setInterval(refresh,5000);
+async function refresh(){try{let r=await fetch('/api/status',{cache:'no-store'});let d=await r.json();render(d)}catch(e){document.getElementById('status').textContent='● BAĞLANTI HATASI'}}
+let markets=[];
+const fmtVol=x=>{x=Number(x||0);if(x>=1e9)return '$'+(x/1e9).toFixed(1)+'B';if(x>=1e6)return '$'+(x/1e6).toFixed(1)+'M';if(x>=1e3)return '$'+(x/1e3).toFixed(1)+'K';return '$'+x.toFixed(0)};
+function renderMarkets(){const q=document.getElementById('coinSearch').value.trim().toUpperCase();const rows=markets.filter(m=>!q||m.symbol.includes(q)||m.base.includes(q)).slice(0,500);document.getElementById('marketList').innerHTML=rows.map(m=>`<tr><td><input type="checkbox" class="coinCheck" value="${m.symbol}"></td><td><b>${m.base}</b><div class="reason">${m.symbol}</div></td><td>${num(m.price)}</td><td class="${m.change_pct>=0?'green':'red'}">${Number(m.change_pct).toFixed(2)}%</td><td>${fmtVol(m.volume)}</td><td><span class="tag">PERP</span></td></tr>`).join('')||'<tr><td colspan=6>Coin bulunamadı.</td></tr>';document.getElementById('scannerStatus').textContent=`${markets.length} aktif USDT perpetual • listede ${rows.length}`;}
+async function loadMarkets(){try{document.getElementById('scannerStatus').textContent='Coinler yükleniyor...';let r=await fetch('/api/markets',{cache:'no-store'});markets=await r.json();renderMarkets()}catch(e){document.getElementById('scannerStatus').textContent='Coin listesi alınamadı: '+e}}
+function toggleAll(el){document.querySelectorAll('.coinCheck').forEach(x=>x.checked=el.checked)}
+function selectedSymbols(){return [...document.querySelectorAll('.coinCheck:checked')].map(x=>x.value)}
+function renderScan(rows){document.getElementById('scanResults').innerHTML=rows.map(r=>{let sc=r.signal==='LONG'?'signal-long':r.signal==='SHORT'?'signal-short':'signal-none';return `<tr><td><b>${r.symbol}</b></td><td class="${sc}">${r.signal||'ERROR'}</td><td>${num(r.close)}</td><td>${r.supertrend||'—'}</td><td>${r.adx==null?'—':Number(r.adx).toFixed(2)}</td><td>${r.rsi==null?'—':Number(r.rsi).toFixed(2)}</td><td>${r.cci==null?'—':Number(r.cci).toFixed(1)}</td><td>${r.macd_ok?'✓':'—'}</td></tr>`}).join('')||'<tr><td colspan=8>Sonuç yok.</td></tr>'}
+async function runScan(symbols){if(!symbols.length){alert('En az bir coin seç.');return}const btn=document.getElementById('scanSelected');const all=document.getElementById('scanAll');btn.disabled=true;all.disabled=true;document.getElementById('scannerStatus').textContent=`${symbols.length} coin taranıyor...`;try{let r=await fetch('/api/scan?symbols='+encodeURIComponent(symbols.join(',')),{cache:'no-store'});let d=await r.json();renderScan(d);const signals=d.filter(x=>x.signal==='LONG'||x.signal==='SHORT').length;document.getElementById('scannerStatus').textContent=`Tarama tamamlandı • ${d.length} coin • ${signals} sinyal adayı`}catch(e){document.getElementById('scannerStatus').textContent='Tarama hatası: '+e}finally{btn.disabled=false;all.disabled=false}}
+function scanSelectedCoins(){runScan(selectedSymbols())}
+function scanAllCoins(){runScan(markets.map(m=>m.symbol))}
+document.getElementById('coinSearch').addEventListener('input',renderMarkets);
+refresh();loadMarkets();setInterval(refresh,5000);
 </script></body></html>'''
 
 def read_state():
@@ -101,6 +115,15 @@ class Handler(BaseHTTPRequestHandler):
         path=urlparse(self.path).path
         if path=='/api/status':
             body=json.dumps(status(),ensure_ascii=False).encode(); self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
+        if path=='/api/markets':
+            body=json.dumps(get_markets(),ensure_ascii=False).encode(); self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
+        if path=='/api/scan':
+            qs=parse_qs(urlparse(self.path).query); raw=qs.get('symbols',[''])[0]; symbols=[x.strip().upper() for x in raw.split(',') if x.strip()]
+            symbols=list(dict.fromkeys(symbols))[:500]
+            if not symbols:
+                body=json.dumps({'error':'symbols required'}).encode(); self.send_response(400); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
+            results=scan_symbols(symbols, workers=5)
+            body=json.dumps(results,ensure_ascii=False).encode(); self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         if path=='/health':
             body=b'OK'; self.send_response(200); self.send_header('Content-Type','text/plain; charset=utf-8'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         body=HTML.encode(); self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body)
