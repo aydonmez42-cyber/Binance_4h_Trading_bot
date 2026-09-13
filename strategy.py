@@ -12,8 +12,10 @@ def long_signal(df, i, cfg):
     if i < 1:
         return False
 
-    # TEST35: 1D regime is a hard directional permission filter.
+    # TEST36: 1D regime + confirmed 4H market structure are hard entry filters.
     if cfg.USE_1D_REGIME_FILTER and row.get("bias_1d", "NONE") != "LONG":
+        return False
+    if cfg.USE_MARKET_STRUCTURE and row.get("structure_bias", "NONE") != "LONG":
         return False
 
     # EMA50/EMA200 define the main trend regime; Supertrend is the trend filter.
@@ -52,8 +54,10 @@ def short_signal(df, i, cfg):
     if i < 1:
         return False
 
-    # TEST35: 1D regime is a hard directional permission filter.
+    # TEST36: 1D regime + confirmed 4H market structure are hard entry filters.
     if cfg.USE_1D_REGIME_FILTER and row.get("bias_1d", "NONE") != "SHORT":
+        return False
+    if cfg.USE_MARKET_STRUCTURE and row.get("structure_bias", "NONE") != "SHORT":
         return False
 
     if not (row["close"] < row["ema100"]):

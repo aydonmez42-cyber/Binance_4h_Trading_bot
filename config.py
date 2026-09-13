@@ -75,6 +75,11 @@ REGIME_ATRP_PCTL_LOW = 10.0
 REGIME_HYSTERESIS_BARS = 2
 USE_1D_REGIME_FILTER = True
 
+# TEST36: confirmed 4H market structure filter
+MARKET_STRUCTURE_LEFT_BARS = 5
+MARKET_STRUCTURE_RIGHT_BARS = 5
+USE_MARKET_STRUCTURE = True
+
 # Output
 TRADES_CSV = "backtest_trades.csv"
 EQUITY_CSV = "backtest_equity.csv"
