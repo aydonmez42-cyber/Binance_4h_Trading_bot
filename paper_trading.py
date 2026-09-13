@@ -175,7 +175,9 @@ def main():
         print(f'STATE RESTORED | position={p.get("side")} {p.get("symbol")} | entry={float(p.get("entry_price", 0)):.4f} | equity={float(state.get("equity", STARTING_EQUITY)):.2f}', flush=True)
     else:
         print(f'STATE RESTORED | position=FLAT | equity={float(state.get("equity", STARTING_EQUITY)):.2f}', flush=True)
-    if os.environ.get('TELEGRAM_VERIFY_ON_START', 'true').strip().lower() in ('1','true','yes','on') and not state.get('telegram_verified_once'):
+    # Verify Telegram at startup without sending a message. This is safe across
+    # Railway restarts and cannot spam the chat.
+    if os.environ.get('TELEGRAM_VERIFY_ON_START', 'true').strip().lower() in ('1','true','yes','on'):
         if verify_connection():
             state['telegram_verified_once'] = True
             save_state(state)

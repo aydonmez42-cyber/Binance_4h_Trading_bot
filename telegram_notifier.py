@@ -13,7 +13,7 @@ def _api(method: str, payload=None, timeout=15):
 
 
 def verify_connection() -> bool:
-    """Verify token and chat ID without ever logging the secret token."""
+    """Verify the bot token and chat ID without sending a startup message."""
     if not TELEGRAM_ENABLED:
         print('TELEGRAM | disabled | set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID', flush=True)
         return False
@@ -29,13 +29,11 @@ def verify_connection() -> bool:
         bot = data.get('result', {})
         print(f'TELEGRAM | token OK | bot=@{bot.get("username", "unknown")}', flush=True)
 
-        # Validate the exact chat_id by sending a harmless connection test.
-        return send_message(
-            '🟢 TEST32 PAPER — TELEGRAM BAĞLANTISI BAŞARILI\n\n'
-            'Paper Trading aktif.\n'
-            'Gerçek emir: KAPALI\n'
-            'Dashboard: AKTİF'
-        )
+        # Do not send a startup message here. Railway/container restarts can happen
+        # automatically and must never create a Telegram-message loop.
+        # Position-open/close and daily-report messages are sent separately.
+        print(f'TELEGRAM | chat configured | chat_id={TELEGRAM_CHAT_ID}', flush=True)
+        return True
     except requests.RequestException as e:
         print(f'TELEGRAM | connection ERROR | {type(e).__name__} | {e}', flush=True)
         return False
