@@ -221,14 +221,14 @@ def main():
         direction="backward",
         allow_exact_matches=True,
     )
-    print("TEST 37 | TEST36 + FOMO Veto | 4H signal/execution unchanged")
+    print("TEST 36 | TEST32 + 1D Regime Filter + 4H Market Structure | 4H signal/execution unchanged")
     print("Structure counts:", signal_df["structure_bias"].value_counts(dropna=False).to_dict())
     print("Regime counts:", signal_df["regime"].value_counts(dropna=False).to_dict())
     print(f"TEST 17 | Fixed {cfg.POSITION_QTY_ETH} ETH | LONG ETHUSD (COIN-M) | SHORT ETHUSDT (USD-M) | RSI long > {cfg.RSI_LONG_THRESHOLD} | RSI short < {cfg.RSI_SHORT_THRESHOLD}")
     trades, equity_curve, final_equity = run_backtest(signal_df, long_df, short_df)
     metrics = calculate_metrics(trades, equity_curve)
     trades.to_csv(cfg.TRADES_CSV, index=False); equity_curve.to_csv(cfg.EQUITY_CSV, index=False)
-    print("\n========== TEST 37 RESULT ==========")
+    print("\n========== TEST 16 RESULT ==========")
     for k,v in metrics.items(): print(f"{k:25s}: {v:.4f}" if isinstance(v,float) else f"{k:25s}: {v}")
     print("====================================")
 
