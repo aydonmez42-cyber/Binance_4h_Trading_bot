@@ -5,7 +5,7 @@ import config as c
 def run(path):
     d=pd.read_csv(path); d.columns=[x.lower() for x in d.columns]
     d.timestamp=pd.to_datetime(d.timestamp,utc=True); d=d.sort_values('timestamp').drop_duplicates('timestamp').reset_index(drop=True)
-    if len(d)<c.MIN_BARS:return [],'SKIP'
+    if len(d)<c.MIN_BARS:return [],-0.0
     d=add_indicators(d); pos=None; eq=c.INITIAL_CAPITAL; peak=eq; dd=0; tr=[]
     for i in range(251,len(d)-1):
         r=d.iloc[i]
@@ -35,8 +35,8 @@ def run(path):
             if s:
                 n=d.iloc[i+1]; ep=n.open*(1+c.SLIPPAGE_RATE if s=='LONG' else 1-c.SLIPPAGE_RATE); a=r.atr
                 pos={'side':s,'entry':ep,'entry_time':n.timestamp,'atr':a,'ta':False,
-                     'sl':ep-(c.ATR_LONG_SL*a if s=='LONG' else -c.ATR_SHORT_SL*a),
-                     'tp':ep+(c.ATR_LONG_TP*a if s=='LONG' else -c.ATR_SHORT_TP*a)}
+                     'sl':ep-c.ATR_LONG_SL*a if s=='LONG' else ep+c.ATR_SHORT_SL*a,
+                     'tp':ep+c.ATR_LONG_TP*a if s=='LONG' else ep-c.ATR_SHORT_TP*a}
         peak=max(peak,eq); dd=min(dd,eq/peak-1)
     return tr,dd
 def main():

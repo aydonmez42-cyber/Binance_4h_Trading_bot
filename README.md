@@ -1,10 +1,19 @@
-# Multi-Coin Scanner / Backtest V1
+# Multi-Coin Scanner / Backtest V2 — Railway
 
-FINAL V1'i değiştirmeden Binance Futures USDT-M perpetual coin evreninde 4H backtest.
-Coin bazlı optimizasyon ve gerçek emir yoktur.
+Railway uyumlu başlangıç paketi.
+- requests dahil
+- pandas/numpy dahil
+- Flask health endpoint dahil
+- gerçek emir yok
+- FINAL V1 parametreleri değişmez
+- 4H
+- coin bazlı optimizasyon yok
 
-Veri formatı: data/<SYMBOL>_4h.csv
-Kolonlar: timestamp, open, high, low, close, volume
+Railway Start Command:
+python health.py
 
-Çalıştırma:
+Backtest:
 python multicoin_backtest.py --data-dir data --output results
+
+CSV format:
+timestamp,open,high,low,close,volume

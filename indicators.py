@@ -23,7 +23,8 @@ def adx(df,n=14):
     return dx.ewm(alpha=1/n,adjust=False).mean()
 def stoch(s):
     r=rsi(s); lo=r.rolling(14).min(); hi=r.rolling(14).max()
-    x=100*(r-lo)/(hi-lo).replace(0,np.nan); k=x.rolling(3).mean(); return k,k.rolling(3).mean()
+    x=100*(r-lo)/(hi-lo).replace(0,np.nan); k=x.rolling(3).mean()
+    return k,k.rolling(3).mean()
 def macd(s):
     m=ema(s,12)-ema(s,26); q=ema(m,9); return m,q,m-q
 def supertrend(df,n=10,mult=7.8):
@@ -32,7 +33,7 @@ def supertrend(df,n=10,mult=7.8):
     for i in range(1,len(df)):
         fu.iloc[i]=up.iloc[i] if up.iloc[i]<fu.iloc[i-1] or df.close.iloc[i-1]>fu.iloc[i-1] else fu.iloc[i-1]
         fl.iloc[i]=lo.iloc[i] if lo.iloc[i]>fl.iloc[i-1] or df.close.iloc[i-1]<fl.iloc[i-1] else fl.iloc[i-1]
-        tr.iloc[i]=1 if (tr.iloc[i-1]==-1 and df.close.iloc[i]>fu.iloc[i]) else (-1 if (tr.iloc[i-1]==1 and df.close.iloc[i]<fl.iloc[i]) else tr.iloc[i-1])
+        tr.iloc[i]=1 if tr.iloc[i-1]==-1 and df.close.iloc[i]>fu.iloc[i] else (-1 if tr.iloc[i-1]==1 and df.close.iloc[i]<fl.iloc[i] else tr.iloc[i-1])
     return tr
 def add_indicators(df):
     d=df.copy(); d['ema50']=ema(d.close,50); d['ema200']=ema(d.close,200); d['adx']=adx(d)
