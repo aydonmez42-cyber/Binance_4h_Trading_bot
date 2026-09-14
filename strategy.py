@@ -80,6 +80,23 @@ def short_signal(df, i, cfg):
     return True
 
 
+def supertrend_exit_signal(df, i, position):
+    """Candle-close Supertrend reversal. Signal is evaluated on closed bars.
+    Execution is handled by the backtest on the next candle open.
+    """
+    if i < 1:
+        return False
+    prev = df.iloc[i - 1]
+    row = df.iloc[i]
+    if position == "LONG":
+        return (float(prev["close"]) >= float(prev["supertrend"]) and
+                float(row["close"]) < float(row["supertrend"]))
+    if position == "SHORT":
+        return (float(prev["close"]) <= float(prev["supertrend"]) and
+                float(row["close"]) > float(row["supertrend"]))
+    return False
+
+
 def exit_signal(position, row):
     if position == "LONG":
         return row["close"] < row["ema100"]

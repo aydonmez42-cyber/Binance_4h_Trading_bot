@@ -5,6 +5,7 @@ import pandas as pd
 
 import config as cfg
 from indicators import add_indicators
+from regime import is_volatile_daily
 from strategy import long_signal, short_signal
 from dashboard import start_dashboard
 from telegram_notifier import send_message, entry_message, exit_message, daily_report, verify_connection
@@ -22,9 +23,10 @@ USD_M_URL = 'https://fapi.binance.com/fapi/v1/klines'
 COIN_M_URL = 'https://dapi.binance.com/dapi/v1/klines'
 
 
-def fetch(symbol, market_type, limit=250):
+def fetch(symbol, market_type, limit=250, interval=None):
     url = COIN_M_URL if market_type == 'COIN_M' else USD_M_URL
-    r = requests.get(url, params={'symbol': symbol, 'interval': cfg.INTERVAL, 'limit': limit}, timeout=20)
+    use_interval = interval or cfg.INTERVAL
+    r = requests.get(url, params={'symbol': symbol, 'interval': use_interval, 'limit': limit}, timeout=20)
     r.raise_for_status()
     data = r.json()
     cols = ['open_time','open','high','low','close','volume','close_time','quote_volume','trades','taker_buy_base','taker_buy_quote','ignore']
@@ -186,7 +188,17 @@ def main():
             signal_df = fetch(cfg.SIGNAL_SYMBOL, 'USD_M', 300)
             long_df = fetch(cfg.LONG_SYMBOL, 'COIN_M', 100)
             short_df = fetch(cfg.SHORT_SYMBOL, 'USD_M', 100)
-            # Only fully closed candles are eligible for signals.
+            # Daily volatility veto uses only the latest fully closed 1D candle.
+            daily_df = fetch(cfg.SIGNAL_SYMBOL, 'USD_M', 400, interval='1d')
+            daily_closed = daily_df.iloc[:-1].copy()
+            volatile_now, atrp_pct, atrp_value = is_volatile_daily(
+                daily_closed,
+                cfg.VOLATILITY_ATR_LENGTH,
+                cfg.VOLATILITY_PERCENTILE_LENGTH,
+                cfg.VOLATILITY_LOW_PERCENTILE,
+                cfg.VOLATILITY_HIGH_PERCENTILE,
+            )
+            # Only fully closed 4H candles are eligible for signals.
             closed = signal_df.iloc[:-1].copy()
             enriched = add_indicators(closed, cfg)
             latest = enriched.iloc[-1]
@@ -228,7 +240,9 @@ def main():
                 'adx': fmt(latest.get('adx')), 'rsi': fmt(latest.get('rsi')),
                 'cci': fmt(latest.get('cci')), 'stoch': 'K/D loaded',
                 'macd': 'BULLISH' if float(latest.get('macd',0)) > float(latest.get('macd_signal',0)) and float(latest.get('macd_hist',0)) > 0 else 'BEARISH',
-                'final': 'LONG' if long_signal(enriched, len(enriched)-1, cfg) else ('SHORT' if short_signal(enriched, len(enriched)-1, cfg) else 'NONE')
+                'volatility': 'BLOCKED' if (cfg.USE_VOLATILE_FILTER and volatile_now) else 'OK',
+                'atrp_percentile_1d': fmt(atrp_pct),
+                'final': 'VOLATILE_BLOCK' if (cfg.USE_VOLATILE_FILTER and volatile_now) else ('LONG' if long_signal(enriched, len(enriched)-1, cfg) else ('SHORT' if short_signal(enriched, len(enriched)-1, cfg) else 'NONE'))
             }
             save_state(state)
 
@@ -248,6 +262,10 @@ def main():
                 if state['position'] is None:
                     go_long = long_signal(enriched, len(enriched)-1, cfg)
                     go_short = short_signal(enriched, len(enriched)-1, cfg)
+                    if cfg.USE_VOLATILE_FILTER and volatile_now:
+                        go_long = False
+                        go_short = False
+                        print(f'CANDLE {latest_closed_time} | VOLATILE BLOCK | 1D ATRP percentile={atrp_pct}', flush=True)
                     if go_long and not go_short:
                         px = exec_price(float(long_df.iloc[-1]['open']), 'BUY')
                         enter(state, 'LONG', px, latest, now)
