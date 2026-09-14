@@ -113,3 +113,9 @@ Telegram mesajları plain text gönderilir; HTML/Markdown parse hataları nedeni
 - Trailing activation 2.2 ATR / distance 2 ATR
 - MACD Long filter ON
 - Paper only — gerçek Binance emri yok
+
+
+## Railway V5
+Dockerfile ile deploy edilir. Start Command boş bırakılabilir; Docker CMD `python paper_trading.py` çalıştırır.
+Dashboard aynı servisin Railway public URL'sinden açılır.
+Gerçek emir yoktur.
