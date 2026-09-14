@@ -1,105 +1,13 @@
-import pandas as pd
-
-def recent_true(series, current_pos, max_bars):
-    start = max(0, current_pos - max_bars + 1)
-    window = series.iloc[start:current_pos + 1]
-    return bool(window.fillna(False).any())
-
-
-def long_signal(df, i, cfg):
-    row = df.iloc[i]
-
-    if i < 1:
-        return False
-
-    # EMA50/EMA200 define the main trend regime; Supertrend is the trend filter.
-    if not (row["close"] > row["ema100"]):
-        return False
-    if not (row["ema50"] > row["ema100"]):
-        return False
-    if not (row["adx"] > cfg.ADX_THRESHOLD):
-        return False
-    if not bool(row["supertrend_bullish"]):
-        return False
-    if not (row["rsi"] > cfg.RSI_LONG_THRESHOLD):
-        return False
-    if cfg.USE_MACD_LONG_FILTER and not bool(row["macd_long_ok"]):
-        return False
-
-    if not recent_true(
-        df["cci"] > cfg.CCI_LONG_THRESHOLD, i, cfg.CCI_VALID_BARS
-    ):
-        return False
-
-    if not recent_true(
-        df["stoch_bull_cross"], i, cfg.STOCH_VALID_BARS
-    ):
-        return False
-
-    if not (row["stoch_d"] > cfg.STOCH_LONG_D_THRESHOLD):
-        return False
-
-    return True
-
-
-def short_signal(df, i, cfg):
-    row = df.iloc[i]
-
-    if i < 1:
-        return False
-
-    if not (row["close"] < row["ema100"]):
-        return False
-    if not (row["ema50"] < row["ema100"]):
-        return False
-    if not (row["adx"] > cfg.ADX_THRESHOLD):
-        return False
-    if not bool(row["supertrend_bearish"]):
-        return False
-    if not (row["rsi"] < cfg.RSI_SHORT_THRESHOLD):
-        return False
-
-    # Bollinger short filter disabled for this test.
-    # 
-    if cfg.USE_BB_SHORT_FILTER and not bool(row["bb_short_reentry"]):
-        return False
-
-    if not recent_true(
-        df["cci"] < cfg.CCI_SHORT_THRESHOLD, i, cfg.CCI_VALID_BARS
-    ):
-        return False
-
-    if not recent_true(
-        df["stoch_bear_cross"], i, cfg.STOCH_VALID_BARS
-    ):
-        return False
-
-    if not (row["stoch_k"] < cfg.STOCH_SHORT_THRESHOLD):
-        return False
-
-    return True
-
-
-def supertrend_exit_signal(df, i, position):
-    """Candle-close Supertrend reversal. Signal is evaluated on closed bars.
-    Execution is handled by the backtest on the next candle open.
-    """
-    if i < 1:
-        return False
-    prev = df.iloc[i - 1]
-    row = df.iloc[i]
-    if position == "LONG":
-        return (float(prev["close"]) >= float(prev["supertrend"]) and
-                float(row["close"]) < float(row["supertrend"]))
-    if position == "SHORT":
-        return (float(prev["close"]) <= float(prev["supertrend"]) and
-                float(row["close"]) > float(row["supertrend"]))
-    return False
-
-
-def exit_signal(position, row):
-    if position == "LONG":
-        return row["close"] < row["ema100"]
-    if position == "SHORT":
-        return row["close"] > row["ema100"]
-    return False
+import config as c
+def cross_up(d,i):
+    a=max(1,i-c.STOCH_VALID_BARS+1)
+    return any(d.stoch_k.iloc[j]>d.stoch_d.iloc[j] and d.stoch_k.iloc[j-1]<=d.stoch_d.iloc[j-1] for j in range(a,i+1))
+def cross_dn(d,i):
+    a=max(1,i-c.STOCH_VALID_BARS+1)
+    return any(d.stoch_k.iloc[j]<d.stoch_d.iloc[j] and d.stoch_k.iloc[j-1]>=d.stoch_d.iloc[j-1] for j in range(a,i+1))
+def signal(d,i):
+    if i<250:return None
+    r=d.iloc[i]
+    L=r.close>r.ema200 and r.ema50>r.ema200 and r.st_trend==1 and r.adx>c.ADX_THRESHOLD and c.LONG_RSI_MIN<r.rsi<=c.LONG_RSI_MAX and r.cci>c.LONG_CCI_MIN and cross_up(d,i) and r.stoch_d>c.LONG_STOCH_D_MIN and r.macd>r.macd_signal and r.macd_hist>0
+    S=r.close<r.ema200 and r.ema50<r.ema200 and r.st_trend==-1 and r.adx>c.ADX_THRESHOLD and r.rsi<c.SHORT_RSI_MAX and r.cci<c.SHORT_CCI_MAX and cross_dn(d,i) and r.stoch_k<c.SHORT_STOCH_K_MAX
+    return 'LONG' if L else ('SHORT' if S else None)
