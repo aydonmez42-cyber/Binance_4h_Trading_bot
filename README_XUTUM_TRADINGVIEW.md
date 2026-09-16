@@ -1,33 +1,22 @@
-# TEST32 RSI72 — XUTUM / TradingView Screener Scanner
+# TEST32 RSI72 — XUTUM / Native TradingView 4H Scanner
 
-Bu sürüm BIST 100 veya BIST Tüm-100 listesini birleştirmez.
+Bu sürüm BIST 100/BIST Tüm-100 birleştirmesi kullanmaz. XUTUM evreni TradingView Turkey Screener üzerinden dinamik olarak alınır.
 
-## Evren
+## Veri kaynağı
+- Evren: TradingView Turkey Screener, aktif BIST common stocks
+- OHLCV: TradingView Chart WebSocket
+- 4H: native TradingView `240` dakika serisi
+- Günlük volatilite filtresi açıksa günlük ATRP de TradingView `1D` serisinden alınır
 
-Scanner, her tarama öncesinde TradingView Turkey Screener API üzerinden:
-- `is_primary = true`
-- `typespecs = common`
-- `type = stock`
-- `exchange = BIST`
-- `active_symbols_only = true`
+TradingView XUTUM teknik ekranında 4 saatlik zaman dilimi ayrı bir timeframe olarak sunulmaktadır. citeturn0search0
 
-filtreleriyle Borsa İstanbul'daki aktif, ana kotasyonlu, adi payları alır. Bu evren XUTUM/BIST Tüm için kullanılır.
+## Mum kuralı
+TradingView bar timestamp'i barın başlangıcıdır. Scanner 240 dakikalık BIST barını +4 saat sonrasında kapalı kabul eder. Böylece sadece kapanmış 4H mum TEST32 RSI72 sinyaline girer.
 
-TradingView'ın XUTUM bileşen sayfası BIST Tüm endeksinin şirket listesini sağlar. XUTUM endeksinde dönemsel bileşen değişiklikleri olduğu için liste ZIP içine sabitlenmek yerine runtime'da çekilir.
+## Strateji
+TEST32 RSI72 parametreleri aynen korunur. Bu değişiklik yalnızca BIST veri kaynağını Yahoo 1H→özel 4H üretiminden TradingView native 4H verisine taşır.
 
-## Fallback
+Gerçek emir yoktur. SHORT yalnızca teknik sinyaldir.
 
-TradingView Screener erişilemezse CNBC-E XUTUM sayfası ikinci kaynak olarak denenir. Fallback de 500'den az sembol döndürürse tarama hata verir; BIST 100'e düşmez.
-
-## Veri ve strateji
-
-- Fiyat verisi: Yahoo Finance `.IS`
-- 1H veri → BIST seansına göre 4H bar
-- Sadece kapanmış 4H mum
-- TEST32 RSI72 koşulları
-- Gerçek emir yok
-- SHORT sonucu yalnızca teknik sinyaldir.
-
-## Önemli
-
-Yaklaşık 650 hisse olduğundan ilk XUTUM taraması BIST100 taramasından daha uzun sürebilir. `BIST_SCANNER_WORKERS` varsayılan 6'dır.
+## Not
+TradingView WebSocket resmi chart veri beslemesinde kullanılan özel protokol üzerinden native chart serisi alınır; protokol ve `create_series` yöntemi kamuya açık teknik örneklerde dokümante edilmiştir.

@@ -1,15 +1,13 @@
 import os
-import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 import pandas as pd
-import requests
-
 import config as cfg
 from indicators import add_indicators, atr
+from tradingview_data import fetch_tv_bars, add_close_time
 from strategy import long_signal, short_signal
 
 # BIST scanner is OBSERVATION ONLY. It never places orders.
@@ -19,8 +17,6 @@ BIST_SCANNER_WORKERS = int(os.environ.get('BIST_SCANNER_WORKERS', '6'))
 BIST_SCANNER_CACHE_SECONDS = int(os.environ.get('BIST_SCANNER_CACHE_SECONDS', '900'))
 BIST_HOURS_LOOKBACK_DAYS = int(os.environ.get('BIST_HOURS_LOOKBACK_DAYS', '365'))
 BIST_MIN_4H_BARS = int(os.environ.get('BIST_MIN_4H_BARS', '230'))
-YAHOO_CHART_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}'
-
 _lock = threading.Lock()
 _state = {
     'status': 'IDLE',
@@ -35,87 +31,14 @@ _state = {
 }
 
 
-def _get(url, params=None, timeout=20):
-    r = requests.get(url, params=params, timeout=timeout, headers={'User-Agent': 'Mozilla/5.0'})
-    r.raise_for_status()
-    return r
-
-
-def get_bist_tum_symbols(force=False):
-    symbols, source = get_xutum_symbols(force=force)
-    with _lock:
-        _state['universe_source'] = source
-    return symbols
-
-
-def get_bist100_symbols():
-    # Backward-compatible alias; scanner now means XUTUM, not BIST100.
-    return get_bist_tum_symbols()
-
-
-def fetch_yahoo_1h(symbol):
-    now = int(time.time())
-    period1 = now - BIST_HOURS_LOOKBACK_DAYS * 86400
-    period2 = now
-    r = _get(
-        YAHOO_CHART_URL.format(symbol=f'{symbol}.IS'),
-        params={'period1': period1, 'period2': period2, 'interval': '1h', 'events': 'history', 'includeAdjustedClose': 'true'},
-        timeout=25,
-    )
-    payload = r.json().get('chart', {}).get('result', [])
-    if not payload:
-        raise RuntimeError('Yahoo veri döndürmedi')
-    item = payload[0]
-    timestamps = item.get('timestamp', [])
-    q = item.get('indicators', {}).get('quote', [{}])[0]
-    if not timestamps:
-        raise RuntimeError('Yahoo candle verisi boş')
-    df = pd.DataFrame({
-        'timestamp': pd.to_datetime(timestamps, unit='s', utc=True),
-        'open': q.get('open', []),
-        'high': q.get('high', []),
-        'low': q.get('low', []),
-        'close': q.get('close', []),
-        'volume': q.get('volume', []),
-    })
-    for c in ['open', 'high', 'low', 'close', 'volume']:
-        df[c] = pd.to_numeric(df[c], errors='coerce')
-    df = df.dropna(subset=['open', 'high', 'low', 'close']).copy()
-    return df
-
-
-def make_4h(df):
-    """Build exchange-session 4H bars: 10:00-14:00 and 14:00-18:00 Europe/Istanbul."""
-    if df.empty:
-        return df
-    x = df.copy().set_index('timestamp').sort_index()
-    x = x.tz_convert('Europe/Istanbul')
-    # Only BIST regular continuous session. Yahoo can contain odd pre/post bars.
-    x = x[(x.index.hour >= 10) & (x.index.hour < 18)]
-    if x.empty:
-        return x.reset_index()
-    # Session-anchored 4H bins.
-    out = x.resample('4h', origin='start_day', offset='10h', label='right', closed='right').agg({
-        'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'
-    })
-    counts = x['close'].resample('4h', origin='start_day', offset='10h', label='right', closed='right').count()
-    out = out[counts >= 3].dropna(subset=['open', 'high', 'low', 'close'])
-    out.index.name = 'close_time'
-    out = out.reset_index()
-    return out
-
-
 def daily_atrp_percentile(symbol):
     try:
-        df = fetch_yahoo_1h(symbol)
-        d = df.set_index('timestamp').tz_convert('Europe/Istanbul').resample('1D').agg({
-            'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last'
-        }).dropna()
+        d = fetch_tv_bars(f"BIST:{symbol}", interval="1D", bars=max(400, cfg.VOLATILITY_PERCENTILE_LENGTH + 40))
         if len(d) < cfg.VOLATILITY_PERCENTILE_LENGTH + 30:
             return None
-        d['atr'] = atr(d['high'], d['low'], d['close'], cfg.VOLATILITY_ATR_LENGTH)
-        d['atrp'] = d['atr'] / d['close'] * 100
-        s = d['atrp'].dropna()
+        d["atr"] = atr(d["high"], d["low"], d["close"], cfg.VOLATILITY_ATR_LENGTH)
+        d["atrp"] = d["atr"] / d["close"] * 100
+        s = d["atrp"].dropna()
         if len(s) < cfg.VOLATILITY_PERCENTILE_LENGTH:
             return None
         latest = float(s.iloc[-1])
@@ -152,15 +75,15 @@ def _reason_map(row):
 
 def scan_symbol(symbol):
     try:
-        df1 = fetch_yahoo_1h(symbol)
-        df = make_4h(df1)
+        df = fetch_tv_bars(f"BIST:{symbol}", interval="240", bars=max(300, BIST_MIN_4H_BARS + 40))
+        df = add_close_time(df, hours=4)
         if len(df) < BIST_MIN_4H_BARS + 5:
-            return {'symbol': symbol, 'market': 'BIST_TUM', 'signal': 'DATA', 'reason': f'Yetersiz 4H veri ({len(df)})'}
+            return {'symbol': symbol, 'market': 'BIST_TUM', 'signal': 'DATA', 'reason': f'Yetersiz TradingView 4H veri ({len(df)})'}
 
-        # The last bar may still be forming. Use only fully closed session bars.
+        # TradingView chart timestamps are bar-open times. A native 240-minute
+        # BIST bar is considered closed only after its 4-hour interval ends.
         now_tr = pd.Timestamp.now(tz='Europe/Istanbul')
-        closed = df[df['close_time'] <= now_tr].copy()
-        # If the latest bar ends in the future, exclude it.
+        closed = df[df['close_time'].dt.tz_convert('Europe/Istanbul') <= now_tr].copy()
         if closed.empty:
             return {'symbol': symbol, 'market': 'BIST_TUM', 'signal': 'DATA', 'reason': 'Kapalı 4H mum yok'}
 
@@ -189,11 +112,10 @@ def scan_symbol(symbol):
             fs = [k for k, v in short_checks.items() if not v]
             reason = 'LONG eksik: ' + ', '.join(fl[:3]) + ' | SHORT eksik: ' + ', '.join(fs[:3])
 
-        last = df1.iloc[-1]
-        prev_day = df1[df1['timestamp'].dt.date < last['timestamp'].date()]
-        # 24h proxy from last available hourly close vs roughly one session/day ago.
-        if len(df1) > 8:
-            base = float(df1.iloc[-9]['close'])
+        last = closed.iloc[-1]
+        # Approximate one-session change using the previous closed 4H bar pair.
+        if len(closed) > 2:
+            base = float(closed.iloc[-3]['close'])
             change = (float(last['close']) / base - 1) * 100 if base else 0
         else:
             change = 0
