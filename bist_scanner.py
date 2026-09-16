@@ -13,9 +13,13 @@ from indicators import add_indicators, atr
 from strategy import long_signal, short_signal
 
 # BIST scanner is OBSERVATION ONLY. It never places orders.
-BIST_SOURCE_URL = os.environ.get(
+BIST100_SOURCE_URL = os.environ.get(
     'BIST100_SOURCE_URL',
     'https://www.cnbce.com/borsa/hisseler/bist-100-hisseleri'
+)
+BIST_TUM100_SOURCE_URL = os.environ.get(
+    'BIST_TUM100_SOURCE_URL',
+    'https://www.cnbce.com/borsa/endeksler/bist-tum-100'
 )
 YAHOO_CHART_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}'
 
@@ -51,31 +55,46 @@ def _get(url, params=None, timeout=20):
     return r
 
 
-def get_bist100_symbols():
-    """Get current BIST-100 symbols from a public index page, with fallback."""
+def _parse_cnbce_symbols(html):
+    # CNBC-E links use /borsa/hisseler/<symbol>-<slug>.
+    found = re.findall(r'/borsa/hisseler/([a-z0-9]+)-', html, flags=re.I)
+    symbols = []
+    seen = set()
+    for s in found:
+        s = s.upper()
+        if s not in seen and 2 <= len(s) <= 8:
+            seen.add(s)
+            symbols.append(s)
+    return set(symbols)
+
+
+def get_bist_tum_symbols():
+    """
+    Get the current BIST Tüm universe. BIST Tüm is BIST 100 plus
+    BIST Tüm-100, so the scanner combines those two live universes.
+    """
     try:
-        html = _get(BIST_SOURCE_URL, timeout=20).text
-        # CNBC-E links use /borsa/hisseler/<symbol>-<slug>.
-        found = re.findall(r'/borsa/hisseler/([a-z0-9]+)-', html, flags=re.I)
-        symbols = []
-        seen = set()
-        for s in found:
-            s = s.upper()
-            if s not in seen and 2 <= len(s) <= 8:
-                seen.add(s)
-                symbols.append(s)
-        # Keep only a plausible BIST-100 sized universe. If parsing returns a
-        # suspiciously small set, use the fallback rather than scanning garbage.
-        if len(symbols) >= 90:
+        h100 = _get(BIST100_SOURCE_URL, timeout=20).text
+        htum100 = _get(BIST_TUM100_SOURCE_URL, timeout=20).text
+        s100 = _parse_cnbce_symbols(h100)
+        stum100 = _parse_cnbce_symbols(htum100)
+        symbols = sorted(s100 | stum100)
+        # BIST Tüm should be materially larger than BIST 100.
+        if len(symbols) >= 150:
             with _lock:
-                _state['universe_source'] = 'CNBC-E dynamic'
-            return sorted(symbols)
+                _state['universe_source'] = f'CNBC-E dynamic BIST100 + BIST TUM-100 ({len(symbols)})'
+            return symbols
     except Exception as exc:
         with _lock:
-            _state['last_error'] = f'BIST universe source: {exc}'
+            _state['last_error'] = f'BIST Tüm universe source: {exc}'
     with _lock:
-        _state['universe_source'] = 'project fallback'
+        _state['universe_source'] = 'project fallback (BIST100)'
     return sorted(set(BIST100_FALLBACK))
+
+
+def get_bist100_symbols():
+    # Backward-compatible alias.
+    return get_bist_tum_symbols()
 
 
 def fetch_yahoo_1h(symbol):
@@ -180,14 +199,14 @@ def scan_symbol(symbol):
         df1 = fetch_yahoo_1h(symbol)
         df = make_4h(df1)
         if len(df) < BIST_MIN_4H_BARS + 5:
-            return {'symbol': symbol, 'market': 'BIST100', 'signal': 'DATA', 'reason': f'Yetersiz 4H veri ({len(df)})'}
+            return {'symbol': symbol, 'market': 'BIST_TUM', 'signal': 'DATA', 'reason': f'Yetersiz 4H veri ({len(df)})'}
 
         # The last bar may still be forming. Use only fully closed session bars.
         now_tr = pd.Timestamp.now(tz='Europe/Istanbul')
         closed = df[df['close_time'] <= now_tr].copy()
         # If the latest bar ends in the future, exclude it.
         if closed.empty:
-            return {'symbol': symbol, 'market': 'BIST100', 'signal': 'DATA', 'reason': 'Kapalı 4H mum yok'}
+            return {'symbol': symbol, 'market': 'BIST_TUM', 'signal': 'DATA', 'reason': 'Kapalı 4H mum yok'}
 
         enriched = add_indicators(closed, cfg)
         i = len(enriched) - 1
@@ -224,7 +243,7 @@ def scan_symbol(symbol):
             change = 0
         return {
             'symbol': symbol,
-            'market': 'BIST100',
+            'market': 'BIST_TUM',
             'signal': sig,
             'price': round(float(last['close']), 4),
             'change_pct': round(float(change), 2),
@@ -243,7 +262,7 @@ def scan_symbol(symbol):
             'short_note': 'Teknik SHORT sinyali; BIST spotta doğrudan short işlem anlamına gelmez.',
         }
     except Exception as e:
-        return {'symbol': symbol, 'market': 'BIST100', 'signal': 'ERROR', 'reason': str(e)[:180]}
+        return {'symbol': symbol, 'market': 'BIST_TUM', 'signal': 'ERROR', 'reason': str(e)[:180]}
 
 
 def _scan_worker(symbols):
@@ -283,7 +302,7 @@ def start_scan(force=False):
                     return False
             except Exception:
                 pass
-    symbols = get_bist100_symbols()
+    symbols = get_bist_tum_symbols()
     threading.Thread(target=_scan_worker, args=(symbols,), daemon=True).start()
     return True
 

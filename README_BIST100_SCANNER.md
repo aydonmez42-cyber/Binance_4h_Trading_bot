@@ -1,6 +1,6 @@
-# BIST100 TEST32 RSI72 Scanner
+# BIST_TUM TEST32 RSI72 Scanner
 
-Bu modül mevcut TEST32 RSI72 teknik sinyal mantığını BIST100 hisselerinde **yalnızca tarama/sinyal** amacıyla uygular.
+Bu modül mevcut TEST32 RSI72 teknik sinyal mantığını BIST_TUM hisselerinde **yalnızca tarama/sinyal** amacıyla uygular.
 
 ## Kurallar
 - 4H kapalı mum kullanılır.
@@ -15,7 +15,7 @@ Bu modül mevcut TEST32 RSI72 teknik sinyal mantığını BIST100 hisselerinde *
 - Mevcut 1D volatilite veto mantığı
 
 ## Veri
-- BIST100 evreni öncelikle CNBC-E BIST100 sayfasından dinamik alınır.
+- BIST_TUM evreni öncelikle CNBC-E BIST_TUM sayfasından dinamik alınır.
 - Kaynak alınamazsa paket içindeki fallback evren kullanılır.
 - Fiyat verisi Yahoo Finance chart endpointinden saatlik alınır ve BIST seansına göre 4H barlara dönüştürülür.
 
@@ -26,3 +26,6 @@ BIST'te 4H mum yapısı kriptodaki 7/24 4H mumlarla birebir aynı değildir; bur
 SHORT sinyali yalnızca teknik sinyaldir. BIST spot piyasasında doğrudan açığa satış emri anlamına gelmez.
 
 Gerçek emir yoktur.
+
+
+Evren: BIST Tüm = BIST 100 + BIST Tüm-100. CNBC-E kaynakları çalışma anında birleştirilir. Borsa İstanbul kural setinde BIST Tüm Endeksi, Yıldız Pazar, Ana Pazar, Alt Pazar ve PÖİP paylarından oluşur; BIST Tüm-100 ise BIST Tüm içinde BIST 100 dışındaki paylardan oluşur.
