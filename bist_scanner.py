@@ -180,7 +180,9 @@ def start_scan(force=False):
                     return False
             except Exception:
                 pass
-    symbols = get_bist_tum_symbols(force=force)
+    symbols, source = get_xutum_symbols(force=force)
+    with _lock:
+        _state['universe_source'] = source
     threading.Thread(target=_scan_worker, args=(symbols,), daemon=True).start()
     return True
 

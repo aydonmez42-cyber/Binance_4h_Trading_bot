@@ -107,3 +107,8 @@ def get_xutum_symbols(force=False):
             errors.append(f'{fn.__name__}: {exc}')
 
     raise RuntimeError('XUTUM evreni alınamadı | ' + ' | '.join(errors))
+
+
+# Backward-compatible alias. Returns (symbols, source), same contract as get_xutum_symbols().
+def get_bist_tum_symbols(force=False):
+    return get_xutum_symbols(force=force)
