@@ -13,27 +13,13 @@ from indicators import add_indicators, atr
 from strategy import long_signal, short_signal
 
 # BIST scanner is OBSERVATION ONLY. It never places orders.
-BIST100_SOURCE_URL = os.environ.get(
-    'BIST100_SOURCE_URL',
-    'https://www.cnbce.com/borsa/hisseler/bist-100-hisseleri'
-)
-BIST_TUM100_SOURCE_URL = os.environ.get(
-    'BIST_TUM100_SOURCE_URL',
-    'https://www.cnbce.com/borsa/endeksler/bist-tum-100'
-)
-YAHOO_CHART_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}'
+from bist_xutum_universe import get_xutum_symbols
 
 BIST_SCANNER_WORKERS = int(os.environ.get('BIST_SCANNER_WORKERS', '6'))
 BIST_SCANNER_CACHE_SECONDS = int(os.environ.get('BIST_SCANNER_CACHE_SECONDS', '900'))
 BIST_HOURS_LOOKBACK_DAYS = int(os.environ.get('BIST_HOURS_LOOKBACK_DAYS', '365'))
 BIST_MIN_4H_BARS = int(os.environ.get('BIST_MIN_4H_BARS', '230'))
-
-# Fallback universe based on the 2026 BIST-100 universe used in project research.
-# Runtime source is preferred so periodic index changes are picked up automatically.
-BIST100_FALLBACK = '''
-AEFES AGHOL AKBNK AKSA AKSEN ALARK ALTNY ANSGR ARCLK ASELS ASTOR BALSU BIMAS BRSAN BRYAT BSOKE BTCIM CANTE CCOLA CIMSA CVKMD CWENE DAPGM DOAS DOHOL DSTKF ECILC EFOR EKGYO ENERY ENJSA ENKAI EREGL EUPWR EUREN FENER FROTO GARAN GENIL GESAN GLRMK GRSEL GRTHO GSRAY GUBRF HALKB HEKTS ISCTR ISMEN IZENR KCHOL KLRHO KONTR KRDMD KTLEV KUYAS MAGEN MAVI MGROS MIATK MPARK OBAMS ODAS OTKAR OYAKC PAHOL PASEU PATEK PETKM PGSUS PSGYO QUAGR RALYH REEDR SAHOL SARKY SASA SISE SKBNK SOKM TABGD TAVHL TCELL THYAO TKFEN TOASO TRALT TRENJ TRMET TSKB TUKAS TUPRS TUREX TURSG ULKER VAKBN VESTL YKBNK ZOREN
-ESEN IEYHO ODINE
-'''.split()
+YAHOO_CHART_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}'
 
 _lock = threading.Lock()
 _state = {
@@ -55,45 +41,15 @@ def _get(url, params=None, timeout=20):
     return r
 
 
-def _parse_cnbce_symbols(html):
-    # CNBC-E links use /borsa/hisseler/<symbol>-<slug>.
-    found = re.findall(r'/borsa/hisseler/([a-z0-9]+)-', html, flags=re.I)
-    symbols = []
-    seen = set()
-    for s in found:
-        s = s.upper()
-        if s not in seen and 2 <= len(s) <= 8:
-            seen.add(s)
-            symbols.append(s)
-    return set(symbols)
-
-
-def get_bist_tum_symbols():
-    """
-    Get the current BIST Tüm universe. BIST Tüm is BIST 100 plus
-    BIST Tüm-100, so the scanner combines those two live universes.
-    """
-    try:
-        h100 = _get(BIST100_SOURCE_URL, timeout=20).text
-        htum100 = _get(BIST_TUM100_SOURCE_URL, timeout=20).text
-        s100 = _parse_cnbce_symbols(h100)
-        stum100 = _parse_cnbce_symbols(htum100)
-        symbols = sorted(s100 | stum100)
-        # BIST Tüm should be materially larger than BIST 100.
-        if len(symbols) >= 150:
-            with _lock:
-                _state['universe_source'] = f'CNBC-E dynamic BIST100 + BIST TUM-100 ({len(symbols)})'
-            return symbols
-    except Exception as exc:
-        with _lock:
-            _state['last_error'] = f'BIST Tüm universe source: {exc}'
+def get_bist_tum_symbols(force=False):
+    symbols, source = get_xutum_symbols(force=force)
     with _lock:
-        _state['universe_source'] = 'project fallback (BIST100)'
-    return sorted(set(BIST100_FALLBACK))
+        _state['universe_source'] = source
+    return symbols
 
 
 def get_bist100_symbols():
-    # Backward-compatible alias.
+    # Backward-compatible alias; scanner now means XUTUM, not BIST100.
     return get_bist_tum_symbols()
 
 
@@ -302,7 +258,7 @@ def start_scan(force=False):
                     return False
             except Exception:
                 pass
-    symbols = get_bist_tum_symbols()
+    symbols = get_bist_tum_symbols(force=force)
     threading.Thread(target=_scan_worker, args=(symbols,), daemon=True).start()
     return True
 
