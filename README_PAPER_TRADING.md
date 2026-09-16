@@ -119,3 +119,7 @@ Telegram mesajları plain text gönderilir; HTML/Markdown parse hataları nedeni
 Dockerfile ile deploy edilir. Start Command boş bırakılabilir; Docker CMD `python paper_trading.py` çalıştırır.
 Dashboard aynı servisin Railway public URL'sinden açılır.
 Gerçek emir yoktur.
+
+
+## TEST32 RSI72 Update
+This package preserves the TEST32 paper-trading architecture and changes only the LONG RSI entry condition to RSI > 55 and RSI <= 72. Short RSI remains < 30. Supertrend remains a trend-direction filter, not an entry trigger. No real orders are enabled.

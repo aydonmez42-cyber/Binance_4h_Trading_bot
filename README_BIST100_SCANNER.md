@@ -1,0 +1,28 @@
+# BIST100 TEST32 RSI72 Scanner
+
+Bu modül mevcut TEST32 RSI72 teknik sinyal mantığını BIST100 hisselerinde **yalnızca tarama/sinyal** amacıyla uygular.
+
+## Kurallar
+- 4H kapalı mum kullanılır.
+- EMA50 / EMA200 trend filtresi
+- Supertrend 10 / 7.8 trend filtresi
+- ADX > 25
+- LONG RSI >55 ve <=72
+- SHORT RSI <30
+- LONG MACD filtresi
+- CCI: LONG >100, SHORT <-50
+- Stoch RSI koşulları
+- Mevcut 1D volatilite veto mantığı
+
+## Veri
+- BIST100 evreni öncelikle CNBC-E BIST100 sayfasından dinamik alınır.
+- Kaynak alınamazsa paket içindeki fallback evren kullanılır.
+- Fiyat verisi Yahoo Finance chart endpointinden saatlik alınır ve BIST seansına göre 4H barlara dönüştürülür.
+
+## Önemli
+Bu scanner BIST için backtest edilmiş bir strateji değildir. Crypto TEST32'nin BIST'e teknik olarak uygulanmış gözlem sürümüdür.
+BIST'te 4H mum yapısı kriptodaki 7/24 4H mumlarla birebir aynı değildir; burada 10:00–14:00 ve 14:00–18:00 seans barları kullanılır.
+
+SHORT sinyali yalnızca teknik sinyaldir. BIST spot piyasasında doğrudan açığa satış emri anlamına gelmez.
+
+Gerçek emir yoktur.

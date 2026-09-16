@@ -23,6 +23,8 @@ def long_signal(df, i, cfg):
         return False
     if not (row["rsi"] > cfg.RSI_LONG_THRESHOLD):
         return False
+    if not (row["rsi"] <= cfg.RSI_LONG_MAX):
+        return False
     if cfg.USE_MACD_LONG_FILTER and not bool(row["macd_long_ok"]):
         return False
 
