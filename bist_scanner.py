@@ -113,21 +113,23 @@ def scan_symbol(symbol):
             reason = 'LONG eksik: ' + ', '.join(fl[:3]) + ' | SHORT eksik: ' + ', '.join(fs[:3])
 
         last = closed.iloc[-1]
-        # DAILY CHANGE: compare the latest closed 4H price with the previous
-        # BIST trading day's official daily close. Do NOT compare 4H bars
-        # against each other; that can create nonsensical percentages (e.g. 250%).
+        # DAILY CHANGE: BIST has a +/-10% daily price-limit band, so the only
+        # value that can ever legitimately be called "daily change %" is the
+        # move between two fully-closed daily sessions: yesterday's official
+        # close vs the close of the day before that. We never compare a 4H
+        # bar (which can be a mid-session, adjustment-mismatched price)
+        # against a daily close, since that mixing is what produced the
+        # impossible >10% readings.
         try:
-            daily = fetch_tv_bars(f"BIST:{symbol}", interval="1D", bars=10)
-            daily = daily.sort_values('timestamp').drop_duplicates('timestamp')
-            if len(daily) >= 2:
-                last_4h_ts = pd.Timestamp(last['timestamp'])
-                # Use the most recent daily close whose session is before the
-                # current 4H bar's trading day. This is the previous BIST day close.
-                dlocal = daily['timestamp'].dt.tz_convert('Europe/Istanbul')
-                day = last_4h_ts.tz_convert('Europe/Istanbul').date()
-                prior = daily.loc[dlocal.dt.date < day]
-                base = float(prior.iloc[-1]['close']) if not prior.empty else float(daily.iloc[-2]['close'])
-                change = (float(last['close']) / base - 1) * 100 if base else 0
+            daily = fetch_tv_bars(f"BIST:{symbol}", interval="1D", bars=12)
+            daily = daily.sort_values('timestamp').drop_duplicates('timestamp').reset_index(drop=True)
+            now_tr = pd.Timestamp.now(tz='Europe/Istanbul')
+            daily_local_date = daily['timestamp'].dt.tz_convert('Europe/Istanbul').dt.date
+            closed_daily = daily.loc[daily_local_date < now_tr.date()]
+            if len(closed_daily) >= 2:
+                day_before_close = float(closed_daily.iloc[-2]['close'])   # önceki günün kapanışı
+                yesterday_close = float(closed_daily.iloc[-1]['close'])    # dünün kapanışı
+                change = (yesterday_close / day_before_close - 1) * 100 if day_before_close else 0
             else:
                 change = 0
         except Exception:
