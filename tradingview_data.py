@@ -62,6 +62,8 @@ def _extract_rows(message):
         return []
     container = p[1]
     rows = []
+    # A plausible unix timestamp (seconds) for any real market bar: 2001-09-09 .. 2100-01-01.
+    TS_MIN, TS_MAX = 1_000_000_000, 4_102_444_800
     for series in container.values():
         if not isinstance(series, dict):
             continue
@@ -69,13 +71,29 @@ def _extract_rows(message):
             v = item.get("v") if isinstance(item, dict) else None
             if not isinstance(v, list) or len(v) < 5:
                 continue
-            # Standard TradingView chart payload: [bar_index, time, open, high, low, close, volume]
-            if len(v) >= 7:
-                _, ts, op, hi, lo, cl, vol = v[:7]
-            else:
-                _, ts, op, hi, lo = v[:5]
-                cl = v[5] if len(v) > 5 else None
-                vol = v[6] if len(v) > 6 else None
+            # TradingView bar payloads are normally [time, open, high, low,
+            # close, volume] with NO leading "bar index" inside v (the bar
+            # index, when present, lives in the sibling "i" key which we
+            # don't need). Assuming a fixed leading index column shifts
+            # every field by one -> open gets read as the timestamp and
+            # volume gets read as the close price, producing impossible
+            # "1970" candle times and multi-million "prices". Instead,
+            # locate the real timestamp by magnitude, wherever it sits.
+            ts_idx = None
+            for idx in (0, 1):
+                try:
+                    if idx < len(v) and TS_MIN <= float(v[idx]) <= TS_MAX:
+                        ts_idx = idx
+                        break
+                except (TypeError, ValueError):
+                    continue
+            if ts_idx is None:
+                continue
+            vals = v[ts_idx:]
+            if len(vals) < 5:
+                continue
+            ts, op, hi, lo, cl = vals[:5]
+            vol = vals[5] if len(vals) > 5 else 0.0
             try:
                 ts = float(ts)
                 rows.append({"timestamp": pd.Timestamp(ts, unit="s", tz="UTC"),
