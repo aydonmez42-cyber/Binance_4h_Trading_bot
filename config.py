@@ -8,7 +8,8 @@ INTERVAL = "4h"
 
 # Indicator parameters
 EMA_FAST = 50
-EMA_SLOW = 200
+EMA_SLOW = 100   # revised from 200 — column/var names ("ema100") were already
+                  # named for this; the config value just hadn't matched until now.
 ADX_LENGTH = 14
 ADX_THRESHOLD = 20   # was 25 — ADX lags; 25 waited for the trend to be fully established
 

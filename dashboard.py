@@ -380,7 +380,7 @@ function render(d){
   }
 
   const s=d.signals||{};
-  const rows=[['EMA 50 / 200',s.ema],['Supertrend',s.supertrend],['ADX',s.adx],['RSI',s.rsi],['CCI',s.cci],['Stoch RSI',s.stoch],['MACD',s.macd],['1D Volatilite',s.volatility],['1D ATRP %ile',s.atrp_percentile_1d]];
+  const rows=[['EMA 50 / 100',s.ema],['Supertrend',s.supertrend],['ADX',s.adx],['RSI',s.rsi],['CCI',s.cci],['Stoch RSI',s.stoch],['MACD',s.macd],['1D Volatilite',s.volatility],['1D ATRP %ile',s.atrp_percentile_1d]];
   document.getElementById('signals').innerHTML=
     '<div class="chip-grid">'+
     rows.map(r=>`<div class="chip"><span class="chip-label">${r[0]}</span><span class="chip-value ${chipClass(r[1])}">${r[1]??'—'}</span></div>`).join('')+

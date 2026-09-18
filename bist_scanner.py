@@ -50,8 +50,8 @@ def daily_atrp_percentile(symbol):
 
 def _reason_map(row):
     long_checks = {
-        'EMA200 trend': bool(row.close > row.ema100),
-        'EMA50 > EMA200': bool(row.ema50 > row.ema100),
+        'EMA100 trend': bool(row.close > row.ema100),
+        'EMA50 > EMA100': bool(row.ema50 > row.ema100),
         'ADX > threshold': bool(row.adx > cfg.ADX_THRESHOLD),
         'Supertrend bullish': bool(row.supertrend_bullish),
         'RSI 55–72': bool(row.rsi > cfg.RSI_LONG_THRESHOLD and row.rsi <= cfg.RSI_LONG_MAX),
@@ -61,8 +61,8 @@ def _reason_map(row):
         'Stoch D > 30': bool(row.stoch_d > cfg.STOCH_LONG_D_THRESHOLD),
     }
     short_checks = {
-        'EMA200 trend': bool(row.close < row.ema100),
-        'EMA50 < EMA200': bool(row.ema50 < row.ema100),
+        'EMA100 trend': bool(row.close < row.ema100),
+        'EMA50 < EMA100': bool(row.ema50 < row.ema100),
         'ADX > threshold': bool(row.adx > cfg.ADX_THRESHOLD),
         'Supertrend bearish': bool(row.supertrend_bearish),
         'RSI < 30': bool(row.rsi < cfg.RSI_SHORT_THRESHOLD),
