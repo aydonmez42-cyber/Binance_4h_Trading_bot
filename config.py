@@ -43,7 +43,7 @@ STOCH_VALID_BARS = 3
 # ALL 8 confluence conditions (see strategy.py long_conditions/short_conditions);
 # this many of the 8 must be true. The RSI overbought cap remains a separate,
 # always-hard safety veto and is not part of this count.
-ENTRY_MIN_SCORE = 6
+ENTRY_MIN_SCORE = 7   # was 6 — 6/8 let too much low-quality confluence through (see PF collapse: 2.02 -> 1.07)
 
 # ATR risk / exit model
 ATR_LENGTH = 14
@@ -52,7 +52,12 @@ ATR_SHORT_SL_MULTIPLIER = 1.35       # TEST 1: Initial stop distance = ATR * 2.0
 ATR_LONG_TP_MULTIPLIER = 4.0   # TEST 32: Long TP = ATR * 4.0
 ATR_SHORT_TP_MULTIPLIER = 3.0  # TEST 32: Short TP = ATR * 3.0
 ATR_TRAIL_ACTIVATION = 2.2    # TEST 1: Activate trailing after +2 ATR unrealized
-ATR_TRAIL_MULTIPLIER = 2.0    # TEST 1: Trail distance = ATR * 2.0
+ATR_TRAIL_MULTIPLIER = 1.3    # was 2.0 — at 2.0 the trail sat only 0.2 ATR above
+                                # entry the instant it activated (2.2-2.0), so a
+                                # small pullback right after activation locked in
+                                # a near-breakeven exit instead of riding toward TP.
+                                # 1.3 locks in ~0.9 ATR immediately and keeps
+                                # trailing closer to the peak all the way up.
 
 USE_ATR_SL = True
 USE_ATR_TP = True
