@@ -54,11 +54,8 @@ STOCH_VALID_BARS = 3
 # ALL 8 confluence conditions (see strategy.py long_conditions/short_conditions);
 # this many of the 8 must be true. The RSI overbought cap remains a separate,
 # always-hard safety veto and is not part of this count.
-ENTRY_MIN_SCORE = 7          # LONG threshold
-SHORT_ENTRY_MIN_SCORE = 8    # SHORT threshold — stricter: backtest showed SHORT
-                               # net-losing (PF 0.90) at the same 7/8 bar LONG
-                               # was thriving at (PF 1.38); ETH's long-run upward
-                               # drift makes shorting it structurally harder.
+ENTRY_MIN_SCORE = 8          # LONG threshold — was 7/8 (87.5%), now 8/9 (~88.9%) to preserve strictness
+SHORT_ENTRY_MIN_SCORE = 9    # SHORT threshold — was 8/8 (100%), now 9/9 (100%) — still "all must agree"
 
 # ATR risk / exit model
 ATR_LENGTH = 14
