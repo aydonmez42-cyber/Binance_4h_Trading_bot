@@ -87,3 +87,9 @@ VOLATILITY_PERCENTILE_LENGTH = 365
 VOLATILITY_LOW_PERCENTILE = 10.0
 VOLATILITY_HIGH_PERCENTILE = 90.0
 USE_VOLATILE_FILTER = True
+
+# Watchlist — symbols manually added from the scanner ("+ Ekle"). Same
+# strategy/indicators as the main ETH engine, but sized in USD notional
+# instead of a fixed coin quantity, since altcoin prices vary hugely.
+WATCHLIST_POSITION_USD = 250.0
+WATCHLIST_MAX_SYMBOLS = 10

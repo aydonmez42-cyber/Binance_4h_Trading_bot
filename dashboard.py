@@ -2,12 +2,18 @@ import csv, json, os, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
+import config as cfg
 from scanner import snapshot as scanner_snapshot, start_scan as scanner_start, ensure_background_scan, background_loop
 from bist_scanner import snapshot as bist_scanner_snapshot, start_scan as bist_scanner_start, background_loop as bist_background_loop
+from state_store import (
+    STATE_FILE, TRADES_FILE,
+    load_state as _load_shared_state,
+    add_to_watchlist as _add_to_watchlist,
+    remove_from_watchlist as _remove_from_watchlist,
+)
 
-STATE_FILE = os.environ.get('PAPER_STATE_FILE', 'paper_state.json')
-TRADES_FILE = os.environ.get('PAPER_TRADES_FILE', 'paper_trades.csv')
 PORT = int(os.environ.get('PORT', '8080'))
+STARTING_EQUITY = float(os.environ.get('PAPER_INITIAL_CAPITAL', str(cfg.INITIAL_CAPITAL)))
 
 HTML = r'''<!doctype html>
 <html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -137,6 +143,12 @@ th.sort-active{color:var(--accent)}
 .tag-short{background:var(--bear-bg);color:var(--bear)}
 .tag-flat{background:var(--neu-bg);color:var(--text-dim)}
 .footnote{margin-top:12px;color:var(--text-faint);font-size:11.5px}
+.text-faint{color:var(--text-faint)}
+.add-btn{background:var(--accent-soft);color:var(--accent);border:1px solid #4a3d22;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font-d);white-space:nowrap}
+.add-btn:hover{background:var(--accent);color:#1a1406}
+.add-btn:disabled{opacity:.55;cursor:default}
+.added-tag{color:var(--bull);font-size:11px;font-weight:700;font-family:var(--font-m);white-space:nowrap}
+.watchlist-empty{color:var(--text-dim);font-size:13px;padding:4px 0}
 .page-footer{text-align:center;color:var(--text-faint);font-size:11.5px;margin-top:6px}
 
 @media(max-width:900px){.cols{grid-template-columns:1fr}.pos-grid{grid-template-columns:1fr 1fr}.chip-grid{grid-template-columns:1fr}}
@@ -196,6 +208,17 @@ th.sort-active{color:var(--accent)}
   </div>
 </section>
 
+<section class="panel">
+  <div class="panel-head"><h2>Takip listesi</h2><span class="text-faint" id="watchlistCount">0 / 10</span></div>
+  <div class="table-scroll">
+    <table class="datatable">
+      <thead><tr><th>Sembol</th><th>Piyasa</th><th>Yön / Sinyal</th><th class="num">Fiyat</th><th class="num">Unrealized P&amp;L</th><th>Eklenme</th><th></th></tr></thead>
+      <tbody id="watchlistRows"><tr><td colspan="7" class="empty">Yükleniyor…</td></tr></tbody>
+    </table>
+  </div>
+  <div class="footnote">Kripto sembolleri aynı strateji ile bağımsız bir paper pozisyon açar (boyut: $<span id="wlUsd">—</span> nominal). XUTUM sembolleri yalnızca sinyal takibidir; gerçek/paper emir açılmaz.</div>
+</section>
+
 <section class="panel scanner-panel">
   <div class="panel-head scanner-tabs">
     <button class="tab active" data-tab="crypto" onclick="switchTab('crypto')">Binance Futures</button>
@@ -228,8 +251,9 @@ th.sort-active{color:var(--accent)}
           <th class="sortable num" data-key="atrp_percentile_1d" data-tbl="scanner">ATRP %ile</th>
           <th class="sortable" data-key="signal" data-tbl="scanner">Sinyal</th>
           <th>Açıklama</th>
+          <th>Ekle</th>
         </tr></thead>
-        <tbody id="scannerRows"><tr><td colspan="12" class="empty">Tarama bekleniyor…</td></tr></tbody>
+        <tbody id="scannerRows"><tr><td colspan="13" class="empty">Tarama bekleniyor…</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -259,8 +283,9 @@ th.sort-active{color:var(--accent)}
           <th class="sortable num" data-key="atrp_percentile_1d" data-tbl="bist">ATRP %ile</th>
           <th class="sortable" data-key="signal" data-tbl="bist">Sinyal</th>
           <th>Açıklama</th>
+          <th>Ekle</th>
         </tr></thead>
-        <tbody id="bistScannerRows"><tr><td colspan="12" class="empty">Tarama bekleniyor…</td></tr></tbody>
+        <tbody id="bistScannerRows"><tr><td colspan="13" class="empty">Tarama bekleniyor…</td></tr></tbody>
       </table>
     </div>
     <div class="footnote">SHORT burada yalnızca stratejinin teknik sinyalidir; BIST spot piyasasında doğrudan açığa satış emri anlamına gelmez.</div>
@@ -373,6 +398,48 @@ function switchTab(name){
 function sigClass(x){return x==='LONG'?'sig-long':x==='SHORT'?'sig-short':x==='ERROR'?'sig-error':'sig-none'}
 function sigPill(x){const c=x==='LONG'?'long':x==='SHORT'?'short':'flat';return `<span class="pill ${c}">${x}</span>`}
 
+let watchlistSymbols=new Set();
+function addCell(symbol,market,signal){
+  if(signal!=='LONG'&&signal!=='SHORT') return '<span class="text-faint">—</span>';
+  if(watchlistSymbols.has(symbol)) return '<span class="added-tag">Eklendi ✓</span>';
+  return `<button class="add-btn" onclick="addToWatchlist('${symbol}','${market}','${signal}',this)">+ Ekle</button>`;
+}
+async function addToWatchlist(symbol,market,signal,btn){
+  if(btn){btn.disabled=true;btn.textContent='Ekleniyor…';}
+  try{
+    const r=await fetch(`/api/watchlist/add?symbol=${encodeURIComponent(symbol)}&market=${market}&signal=${encodeURIComponent(signal)}`,{cache:'no-store'});
+    const d=await r.json();
+    if(!d.ok && btn){btn.disabled=false;btn.textContent='+ Ekle';alert(d.error||'Eklenemedi');}
+  }catch(e){ if(btn){btn.disabled=false;btn.textContent='+ Ekle';} }
+  await refreshWatchlist();
+}
+async function removeFromWatchlist(symbol){
+  try{ await fetch(`/api/watchlist/remove?symbol=${encodeURIComponent(symbol)}`,{cache:'no-store'}); }catch(e){}
+  await refreshWatchlist();
+}
+async function refreshWatchlist(){
+  let d;
+  try{ const r=await fetch('/api/watchlist',{cache:'no-store'}); d=await r.json(); }catch(e){ return; }
+  document.getElementById('wlUsd').textContent=Number(d.position_usd||0).toLocaleString('en-US');
+  const items=d.items||[];
+  watchlistSymbols=new Set(items.map(x=>x.symbol));
+  document.getElementById('watchlistCount').textContent=`${items.length} / ${d.max_symbols??'—'}`;
+  document.getElementById('watchlistRows').innerHTML=items.length?items.map(x=>{
+    const p=x.position;
+    let sideCell, pnlCell;
+    if(p){
+      sideCell=`<span class="pill ${p.side.toLowerCase()}">${p.side}</span>`;
+      pnlCell=`<span class="${cls(p.unrealized_pnl)}">${money(p.unrealized_pnl)}</span>`;
+    } else {
+      sideCell=sigPill(x.current_signal||'NO SIGNAL');
+      pnlCell=x.market==='bist'?'<span class="text-faint">izleniyor</span>':'<span class="text-faint">pozisyon yok</span>';
+    }
+    const added=(x.added_at||'').replace('T',' ').slice(0,16);
+    return `<tr><td><b>${x.symbol}</b></td><td>${x.market==='bist'?'XUTUM':'Binance'}</td><td>${sideCell}</td><td class="num">${num(p?p.current_price:x.current_price)}</td><td class="num">${pnlCell}</td><td class="text-faint">${added}</td><td><button class="btn" onclick="removeFromWatchlist('${x.symbol}')">Kaldır</button></td></tr>`;
+  }).join(''):'<tr><td colspan="7" class="watchlist-empty">Takip listesi boş. Tarayıcıda LONG/SHORT veren bir sembole "+ Ekle" diyerek botun izlemesini/paper trade etmesini sağlayabilirsin.</td></tr>';
+  renderScanner(); renderBistScanner();
+}
+
 const sortState={scanner:{key:null,dir:1},bist:{key:null,dir:1}};
 function attachSort(tblId,cacheGetter,renderFn){
   document.querySelectorAll(`#${tblId} th[data-key]`).forEach(th=>{
@@ -406,7 +473,7 @@ function renderScanner(){
   let f=document.getElementById('signalFilter')?.value||'ALL';
   let rows=scannerCache.results.filter(x=>(!q||x.symbol.includes(q))&&(f==='ALL'||x.signal===f));
   rows=sortRows(rows,'scanner');
-  document.getElementById('scannerRows').innerHTML=rows.map(x=>`<tr><td><b>${x.symbol}</b></td><td class="num">${num(x.price)}</td><td class="num ${Number(x.change_pct)>=0?'pos':'neg'}">${Number(x.change_pct||0).toFixed(2)}%</td><td class="num">${Number(x.volume||0).toLocaleString('en-US',{maximumFractionDigits:0})}</td><td>${x.st||'—'}</td><td class="num">${x.adx??'—'}</td><td class="num">${x.rsi??'—'}</td><td class="num">${x.cci??'—'}</td><td>${x.macd||'—'}</td><td class="num">${x.atrp_percentile_1d??'—'}</td><td>${sigPill(x.signal)}</td><td class="wrap-cell">${x.reason||''}</td></tr>`).join('')||'<tr><td colspan="12" class="empty">Sonuç yok.</td></tr>';
+  document.getElementById('scannerRows').innerHTML=rows.map(x=>`<tr><td><b>${x.symbol}</b></td><td class="num">${num(x.price)}</td><td class="num ${Number(x.change_pct)>=0?'pos':'neg'}">${Number(x.change_pct||0).toFixed(2)}%</td><td class="num">${Number(x.volume||0).toLocaleString('en-US',{maximumFractionDigits:0})}</td><td>${x.st||'—'}</td><td class="num">${x.adx??'—'}</td><td class="num">${x.rsi??'—'}</td><td class="num">${x.cci??'—'}</td><td>${x.macd||'—'}</td><td class="num">${x.atrp_percentile_1d??'—'}</td><td>${sigPill(x.signal)}</td><td class="wrap-cell">${x.reason||''}</td><td>${addCell(x.symbol,'crypto',x.signal)}</td></tr>`).join('')||'<tr><td colspan="13" class="empty">Sonuç yok.</td></tr>';
   document.getElementById('coinCount').textContent=rows.length+' coin';
   document.getElementById('longCount').textContent='LONG '+rows.filter(x=>x.signal==='LONG').length;
   document.getElementById('shortCount').textContent='SHORT '+rows.filter(x=>x.signal==='SHORT').length;
@@ -419,7 +486,7 @@ function renderBistScanner(){
   let f=document.getElementById('bistSignalFilter')?.value||'ALL';
   let rows=bistScannerCache.results.filter(x=>(!q||x.symbol.includes(q))&&(f==='ALL'||x.signal===f));
   rows=sortRows(rows,'bist');
-  document.getElementById('bistScannerRows').innerHTML=rows.map(x=>`<tr><td><b>${x.symbol}</b></td><td class="num">${num(x.price)}</td><td class="num ${Number(x.change_pct)>=0?'pos':'neg'}">${Number(x.change_pct||0).toFixed(2)}%</td><td>${x.st||'—'}</td><td class="num">${x.adx??'—'}</td><td class="num">${x.rsi??'—'}</td><td class="num">${x.cci??'—'}</td><td>${x.macd||'—'}</td><td class="num">${x.stoch_k??'—'} / ${x.stoch_d??'—'}</td><td class="num">${x.atrp_percentile_1d??'—'}</td><td>${sigPill(x.signal)}</td><td class="wrap-cell">${x.reason||''}</td></tr>`).join('')||'<tr><td colspan="12" class="empty">Sonuç yok.</td></tr>';
+  document.getElementById('bistScannerRows').innerHTML=rows.map(x=>`<tr><td><b>${x.symbol}</b></td><td class="num">${num(x.price)}</td><td class="num ${Number(x.change_pct)>=0?'pos':'neg'}">${Number(x.change_pct||0).toFixed(2)}%</td><td>${x.st||'—'}</td><td class="num">${x.adx??'—'}</td><td class="num">${x.rsi??'—'}</td><td class="num">${x.cci??'—'}</td><td>${x.macd||'—'}</td><td class="num">${x.stoch_k??'—'} / ${x.stoch_d??'—'}</td><td class="num">${x.atrp_percentile_1d??'—'}</td><td>${sigPill(x.signal)}</td><td class="wrap-cell">${x.reason||''}</td><td>${addCell(x.symbol,'bist',x.signal)}</td></tr>`).join('')||'<tr><td colspan="13" class="empty">Sonuç yok.</td></tr>';
   document.getElementById('bistCount').textContent=rows.length+' hisse';
   document.getElementById('bistLongCount').textContent='LONG '+rows.filter(x=>x.signal==='LONG').length;
   document.getElementById('bistShortCount').textContent='SHORT '+rows.filter(x=>x.signal==='SHORT').length;
@@ -451,12 +518,14 @@ async function refresh(){
   catch(e){const st=document.getElementById('status');st.className='status-pill err';st.innerHTML='<span class="dot"></span>Bağlantı hatası';}
 }
 refresh();setInterval(refresh,5000);
+refreshWatchlist();setInterval(refreshWatchlist,10000);
 </script></body></html>'''
 
 def read_state():
     try:
-        with open(STATE_FILE,'r',encoding='utf-8') as f:return json.load(f)
-    except Exception:return {}
+        return _load_shared_state(STARTING_EQUITY)
+    except Exception:
+        return {}
 
 def read_trades():
     if not os.path.exists(TRADES_FILE): return []
@@ -492,6 +561,32 @@ def status():
     indicators=s.get('indicators',{})
     return {'bot_alive': bool(s.get('last_heartbeat')),'heartbeat':s.get('last_heartbeat'),'equity':equity,'net_pnl':net,'return_pct':net/start*100,'price':f(s.get('market_prices',{}).get('ETHUSDT',0)),'price_time':s.get('market_price_time'),'last_closed_time':s.get('last_closed_time'),'position':pos,'signals':s.get('signals',indicators),'stats':{'trades':len(closed),'wins':wins,'losses':losses,'win_rate':wins/len(closed)*100 if closed else 0,'profit_factor':pf,'avg_trade':avg,'max_drawdown':maxdd},'history':list(reversed(closed[-20:]))}
 
+def watchlist_status():
+    s = read_state()
+    watchlist = s.get('watchlist', {}) or {}
+    positions = s.get('positions', {}) or {}
+    signals = s.get('watchlist_signals', {}) or {}
+    items = []
+    for symbol, w in watchlist.items():
+        sig = signals.get(symbol, {})
+        pos = None
+        p = positions.get(symbol)
+        if p:
+            cp = f(sig.get('price', p.get('entry_price')))
+            qty = f(p.get('qty_eth', 0)); ep = f(p.get('entry_price'))
+            unreal = (cp - ep) * qty if p.get('side') == 'LONG' else (ep - cp) * qty
+            active = f(p.get('trail_stop')) if p.get('trail_active') and p.get('trail_stop') is not None else f(p.get('sl'))
+            pos = {**p, 'current_price': cp, 'unrealized_pnl': unreal, 'active_stop': active}
+        items.append({
+            'symbol': symbol, 'market': w.get('market'), 'added_at': w.get('added_at'),
+            'added_signal': w.get('added_signal'), 'current_signal': sig.get('final'),
+            'current_price': sig.get('price'), 'atrp_percentile_1d': sig.get('atrp_percentile_1d'),
+            'updated_at': sig.get('updated_at'), 'position': pos,
+        })
+    items.sort(key=lambda x: x.get('added_at') or '', reverse=True)
+    return {'items': items, 'max_symbols': cfg.WATCHLIST_MAX_SYMBOLS, 'position_usd': cfg.WATCHLIST_POSITION_USD}
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path=urlparse(self.path).path
@@ -511,6 +606,30 @@ class Handler(BaseHTTPRequestHandler):
             q=parse_qs(urlparse(self.path).query); force=q.get('force',['0'])[0]=='1'
             started=scanner_start(force=force)
             body=json.dumps({'started':started,'status':scanner_snapshot().get('status')}).encode(); self.send_response(202 if started else 200); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
+        if path=='/api/watchlist':
+            body=json.dumps(watchlist_status(),ensure_ascii=False).encode(); self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
+        if path=='/api/watchlist/add':
+            q=parse_qs(urlparse(self.path).query)
+            symbol=(q.get('symbol',[''])[0] or '').strip().upper()
+            market=(q.get('market',[''])[0] or '').strip().lower()
+            signal=(q.get('signal',[''])[0] or None)
+            ok, error = False, None
+            if market not in ('crypto','bist'):
+                error='geçersiz piyasa'
+            elif not symbol:
+                error='sembol gerekli'
+            else:
+                cur=read_state().get('watchlist', {}) or {}
+                if symbol not in cur and len(cur) >= cfg.WATCHLIST_MAX_SYMBOLS:
+                    error=f'takip listesi dolu (maks {cfg.WATCHLIST_MAX_SYMBOLS})'
+                else:
+                    _add_to_watchlist(symbol, market, signal); ok=True
+            body=json.dumps({'ok':ok,'error':error},ensure_ascii=False).encode(); self.send_response(200 if ok else 400); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
+        if path=='/api/watchlist/remove':
+            q=parse_qs(urlparse(self.path).query)
+            symbol=(q.get('symbol',[''])[0] or '').strip().upper()
+            if symbol: _remove_from_watchlist(symbol)
+            body=json.dumps({'ok':bool(symbol)}).encode(); self.send_response(200); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         body=HTML.encode(); self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body)
     def log_message(self,*args):return
 

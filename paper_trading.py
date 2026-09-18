@@ -9,18 +9,18 @@ from regime import is_volatile_daily
 from strategy import long_signal, short_signal
 from dashboard import start_dashboard
 from telegram_notifier import send_message, entry_message, exit_message, daily_report, verify_connection
+from state_store import load_state as _load_state, save_state, STATE_FILE, TRADES_FILE
 import threading
 
-DATA_DIR = os.environ.get('PAPER_DATA_DIR', '')
-if DATA_DIR:
-    os.makedirs(DATA_DIR, exist_ok=True)
-STATE_FILE = os.environ.get('PAPER_STATE_FILE', os.path.join(DATA_DIR, 'paper_state.json') if DATA_DIR else 'paper_state.json')
-TRADES_FILE = os.environ.get('PAPER_TRADES_FILE', os.path.join(DATA_DIR, 'paper_trades.csv') if DATA_DIR else 'paper_trades.csv')
 POLL_SECONDS = int(os.environ.get('POLL_SECONDS', '30'))
 STARTING_EQUITY = float(os.environ.get('PAPER_INITIAL_CAPITAL', str(cfg.INITIAL_CAPITAL)))
 
 USD_M_URL = 'https://fapi.binance.com/fapi/v1/klines'
 COIN_M_URL = 'https://dapi.binance.com/dapi/v1/klines'
+
+
+def load_state():
+    return _load_state(STARTING_EQUITY)
 
 
 def fetch(symbol, market_type, limit=250, interval=None):
@@ -36,22 +36,6 @@ def fetch(symbol, market_type, limit=250, interval=None):
     df['open_time'] = pd.to_datetime(df['open_time'], unit='ms', utc=True)
     df['close_time'] = pd.to_datetime(df['close_time'], unit='ms', utc=True)
     return df
-
-
-def load_state():
-    if not os.path.exists(STATE_FILE):
-        return {'equity': STARTING_EQUITY, 'position': None, 'last_closed_time': None, 'last_processed_entry_time': None, 'market_prices': {}, 'signals': {}, 'last_heartbeat': None}
-    with open(STATE_FILE, 'r', encoding='utf-8') as f:
-        s=json.load(f)
-    s.setdefault('market_prices', {}); s.setdefault('signals', {}); s.setdefault('last_heartbeat', None); s.setdefault('last_daily_report_date', None)
-    return s
-
-
-def save_state(s):
-    tmp = STATE_FILE + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump(s, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, STATE_FILE)
 
 
 def log_trade(t):
@@ -168,6 +152,171 @@ def process_intrabar(state, long_candle, short_candle, now):
     return False
 
 
+def enter_symbol(state, symbol, side, price, signal_row, now):
+    """Same entry logic as enter(), generalized to any watchlist symbol and
+    sized in USD notional (cfg.WATCHLIST_POSITION_USD) instead of a fixed
+    coin quantity, since watchlist symbols can have wildly different prices."""
+    atr_val = float(signal_row['atr'])
+    if side == 'LONG':
+        sl = price - cfg.ATR_SL_MULTIPLIER * atr_val
+        tp = price + cfg.ATR_LONG_TP_MULTIPLIER * atr_val
+    else:
+        sl = price + cfg.ATR_SHORT_SL_MULTIPLIER * atr_val
+        tp = price - cfg.ATR_SHORT_TP_MULTIPLIER * atr_val
+    qty = (cfg.WATCHLIST_POSITION_USD / price) if price else 0.0
+    pos = {
+        'side': side, 'symbol': symbol, 'qty_eth': qty,
+        'entry_price': price, 'entry_time': now.isoformat(),
+        'signal_time': signal_row['close_time'].isoformat(), 'atr': atr_val,
+        'sl': sl, 'tp': tp, 'trail_active': False, 'trail_stop': None,
+        'highest_high': price, 'lowest_low': price,
+        'entry_fee': fee(price * qty), 'source': 'watchlist',
+    }
+    state.setdefault('positions', {})[symbol] = pos
+    state['equity'] -= pos['entry_fee']
+    save_state(state)
+    send_message(entry_message(pos))
+    print(f"WATCHLIST ENTRY | {side} {symbol} | price={price:.6f} | ATR={atr_val:.6f} | SL={sl:.6f} | TP={tp:.6f}", flush=True)
+
+
+def exit_symbol_position(state, symbol, raw_price, reason, event_time):
+    p = state['positions'][symbol]
+    side = p['side']
+    price = close_price(raw_price, side)
+    qty = p['qty_eth']
+    gross = (price - p['entry_price']) * qty if side == 'LONG' else (p['entry_price'] - price) * qty
+    exit_fee = fee(price * qty)
+    net = gross - exit_fee - p['entry_fee']
+    state['equity'] += gross - exit_fee
+    trade = {
+        'signal_time': p['signal_time'], 'entry_time': p['entry_time'], 'exit_time': event_time.isoformat(),
+        'side': side, 'symbol': symbol, 'qty_eth': qty, 'entry_price': p['entry_price'],
+        'exit_price': price, 'atr': p['atr'], 'sl': p['sl'], 'tp': p['tp'],
+        'trail_active': p['trail_active'], 'trail_stop': p['trail_stop'],
+        'gross_pnl': gross, 'fees': p['entry_fee'] + exit_fee, 'net_pnl': net, 'reason': reason,
+        'equity_after': state['equity'],
+    }
+    log_trade(trade)
+    print(f"WATCHLIST EXIT  | {side} {symbol} | reason={reason} | price={price:.6f} | net={net:.2f} | equity={state['equity']:.2f}", flush=True)
+    send_message(exit_message(trade))
+    state['positions'].pop(symbol, None)
+    save_state(state)
+
+
+def process_intrabar_symbol(state, symbol, candle, now):
+    p = state.get('positions', {}).get(symbol)
+    if not p:
+        return False
+    high, low = float(candle['high']), float(candle['low'])
+    entry, atr_val = p['entry_price'], p['atr']
+    if p['side'] == 'LONG':
+        stop = p['trail_stop'] if p['trail_active'] and p['trail_stop'] is not None else p['sl']
+        if low <= stop:
+            exit_symbol_position(state, symbol, stop, 'ATR_TRAILING_SL' if p['trail_active'] else 'ATR_SL', now)
+            return True
+        if cfg.USE_ATR_TP and high >= p['tp']:
+            exit_symbol_position(state, symbol, p['tp'], 'ATR_TP', now)
+            return True
+        if cfg.USE_ATR_TRAILING and high >= entry + cfg.ATR_TRAIL_ACTIVATION * atr_val:
+            if not p['trail_active']:
+                p['trail_active'] = True
+                p['highest_high'] = high
+                p['trail_stop'] = high - cfg.ATR_TRAIL_MULTIPLIER * atr_val
+            else:
+                p['highest_high'] = max(p['highest_high'], high)
+                p['trail_stop'] = max(p['trail_stop'], p['highest_high'] - cfg.ATR_TRAIL_MULTIPLIER * atr_val)
+    else:
+        stop = p['trail_stop'] if p['trail_active'] and p['trail_stop'] is not None else p['sl']
+        if high >= stop:
+            exit_symbol_position(state, symbol, stop, 'ATR_TRAILING_SL' if p['trail_active'] else 'ATR_SL', now)
+            return True
+        if cfg.USE_ATR_TP and low <= p['tp']:
+            exit_symbol_position(state, symbol, p['tp'], 'ATR_TP', now)
+            return True
+        if cfg.USE_ATR_TRAILING and low <= entry - cfg.ATR_TRAIL_ACTIVATION * atr_val:
+            if not p['trail_active']:
+                p['trail_active'] = True
+                p['lowest_low'] = low
+                p['trail_stop'] = low + cfg.ATR_TRAIL_MULTIPLIER * atr_val
+            else:
+                p['lowest_low'] = min(p['lowest_low'], low)
+                p['trail_stop'] = min(p['trail_stop'], p['lowest_low'] + cfg.ATR_TRAIL_MULTIPLIER * atr_val)
+    save_state(state)
+    return False
+
+
+def run_watchlist_symbol(state, symbol, now):
+    """Fetch data, refresh the signal snapshot, and manage a paper position for
+    one manually-added crypto watchlist symbol using the exact same strategy
+    and indicators as the main ETH engine (USD-M Binance Futures klines)."""
+    df = fetch(symbol, 'USD_M', 300)
+    daily_df = fetch(symbol, 'USD_M', 400, interval='1d')
+    daily_closed = daily_df.iloc[:-1].copy()
+    volatile_now, atrp_pct, _ = is_volatile_daily(
+        daily_closed, cfg.VOLATILITY_ATR_LENGTH, cfg.VOLATILITY_PERCENTILE_LENGTH,
+        cfg.VOLATILITY_LOW_PERCENTILE, cfg.VOLATILITY_HIGH_PERCENTILE,
+    )
+    closed = df.iloc[:-1].copy()
+    enriched = add_indicators(closed, cfg)
+    latest = enriched.iloc[-1]
+    latest_closed_time = latest['close_time']
+    i = len(enriched) - 1
+    go_long = long_signal(enriched, i, cfg)
+    go_short = short_signal(enriched, i, cfg)
+    blocked = cfg.USE_VOLATILE_FILTER and volatile_now
+
+    state.setdefault('watchlist_signals', {})[symbol] = {
+        'price': float(df.iloc[-1]['close']),
+        'final': 'VOLATILE_BLOCK' if blocked else ('LONG' if go_long else ('SHORT' if go_short else 'NONE')),
+        'atrp_percentile_1d': atrp_pct,
+        'updated_at': now.isoformat(),
+    }
+
+    # Manage an existing paper position first, on the live (still-forming) candle.
+    if symbol in state.get('positions', {}):
+        process_intrabar_symbol(state, symbol, df.iloc[-1], now)
+
+    last_map = state.setdefault('symbol_last_closed', {})
+    last_ts = pd.Timestamp(last_map.get(symbol)) if last_map.get(symbol) else None
+    if last_ts is None or latest_closed_time > last_ts:
+        last_map[symbol] = latest_closed_time.isoformat()
+        if symbol not in state.get('positions', {}):
+            if blocked:
+                go_long = go_short = False
+            if go_long and not go_short:
+                px = exec_price(float(df.iloc[-1]['open']), 'BUY')
+                enter_symbol(state, symbol, 'LONG', px, latest, now)
+            elif go_short and not go_long:
+                px = exec_price(float(df.iloc[-1]['open']), 'SELL')
+                enter_symbol(state, symbol, 'SHORT', px, latest, now)
+    save_state(state)
+
+
+def sync_bist_watchlist_signals(state, now):
+    """BIST symbols are observation-only (no paper trading, per bist_scanner's
+    design) — just mirror the latest cached scan result for any watched symbol
+    so the dashboard can show a live signal without extra TradingView calls."""
+    try:
+        from bist_scanner import snapshot as bist_snapshot
+        results = {r.get('symbol'): r for r in bist_snapshot().get('results', [])}
+    except Exception:
+        return
+    changed = False
+    for symbol, w in state.get('watchlist', {}).items():
+        if w.get('market') != 'bist':
+            continue
+        r = results.get(symbol)
+        if not r:
+            continue
+        state.setdefault('watchlist_signals', {})[symbol] = {
+            'price': r.get('price'), 'final': r.get('signal'),
+            'atrp_percentile_1d': r.get('atrp_percentile_1d'), 'updated_at': now.isoformat(),
+        }
+        changed = True
+    if changed:
+        save_state(state)
+
+
 def main():
     print('TEST32 PAPER TRADING | REAL MARKET DATA | NO REAL ORDERS', flush=True)
     threading.Thread(target=start_dashboard, daemon=True).start()
@@ -185,6 +334,11 @@ def main():
             save_state(state)
     while True:
         try:
+            # Fresh reload every cycle (instead of reusing the in-memory dict):
+            # the dashboard's watchlist add/remove endpoints write to the same
+            # file from another thread, and without a reload here this loop's
+            # next save would silently overwrite those changes.
+            state = load_state()
             signal_df = fetch(cfg.SIGNAL_SYMBOL, 'USD_M', 300)
             long_df = fetch(cfg.LONG_SYMBOL, 'COIN_M', 100)
             short_df = fetch(cfg.SHORT_SYMBOL, 'USD_M', 100)
@@ -277,6 +431,19 @@ def main():
                 else:
                     print(f"CANDLE {latest_closed_time} | position already open: {state['position']['side']}", flush=True)
                 save_state(state)
+
+            # Manually-added watchlist symbols (from the scanner's "+ Ekle" button).
+            # Crypto symbols get a full, independent paper position using the same
+            # strategy; BIST symbols are signal-only (bist_scanner never trades).
+            for wsym, w in list(state.get('watchlist', {}).items()):
+                if w.get('market') != 'crypto':
+                    continue
+                try:
+                    run_watchlist_symbol(state, wsym, now)
+                except Exception as e:
+                    print(f'WATCHLIST ERROR | {wsym} | {type(e).__name__}: {e}', flush=True)
+            sync_bist_watchlist_signals(state, now)
+
             time.sleep(POLL_SECONDS)
         except Exception as e:
             print(f'ERROR | {type(e).__name__}: {e}', flush=True)
