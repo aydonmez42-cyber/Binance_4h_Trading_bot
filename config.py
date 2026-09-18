@@ -36,12 +36,6 @@ STOCH_LONG_THRESHOLD = 20
 STOCH_LONG_D_THRESHOLD = 30.0
 STOCH_SHORT_THRESHOLD = 80
 
-# 9th confluence condition — "Commodity Trends AI" (GLOBAL-100 indicator).
-# Same defaults as the Pine Script: CCI(30), sticky trend flips at +50/-50.
-CT_AI_CCI_LENGTH = 30
-CT_AI_UPPER = 50.0
-CT_AI_LOWER = -50.0
-
 # Historical condition validity
 CCI_VALID_BARS = 3    # was 1 — no longer forces CCI to spike on the exact same candle as the stoch cross
 STOCH_VALID_BARS = 3
@@ -54,8 +48,11 @@ STOCH_VALID_BARS = 3
 # ALL 8 confluence conditions (see strategy.py long_conditions/short_conditions);
 # this many of the 8 must be true. The RSI overbought cap remains a separate,
 # always-hard safety veto and is not part of this count.
-ENTRY_MIN_SCORE = 8          # LONG threshold — was 7/8 (87.5%), now 8/9 (~88.9%) to preserve strictness
-SHORT_ENTRY_MIN_SCORE = 9    # SHORT threshold — was 8/8 (100%), now 9/9 (100%) — still "all must agree"
+ENTRY_MIN_SCORE = 7          # LONG threshold
+SHORT_ENTRY_MIN_SCORE = 8    # SHORT threshold — stricter: backtest showed SHORT
+                               # net-losing (PF 0.90) at the same 7/8 bar LONG
+                               # was thriving at (PF 1.38); ETH's long-run upward
+                               # drift makes shorting it structurally harder.
 
 # ATR risk / exit model
 ATR_LENGTH = 14

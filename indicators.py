@@ -160,28 +160,6 @@ def supertrend(high, low, close, period=10, multiplier=3.0):
     return pd.DataFrame({"supertrend": st, "supertrend_direction": direction}, index=close.index)
 
 
-def cci_trend_state(cci_series, upper=50.0, lower=-50.0):
-    """'Commodity Trends AI' sticky trend state: flips to bullish (True) on a
-    CCI cross above `upper`, to bearish (False) on a CCI cross below `lower`,
-    and otherwise HOLDS its last state — unlike our existing per-bar CCI
-    threshold check, this is a persistent regime, not a momentary spike."""
-    trend = pd.Series([None] * len(cci_series), index=cci_series.index, dtype=object)
-    state = None
-    prev = None
-    for i, val in enumerate(cci_series):
-        if pd.isna(val):
-            trend.iloc[i] = state
-            continue
-        if prev is not None and not pd.isna(prev):
-            if prev <= upper and val > upper:
-                state = True
-            elif prev >= lower and val < lower:
-                state = False
-        trend.iloc[i] = state
-        prev = val
-    return trend
-
-
 def bollinger_bands(close, length=20, std_multiplier=2.0):
     mid = close.rolling(length).mean()
     std = close.rolling(length).std(ddof=0)
@@ -253,14 +231,5 @@ def add_indicators(df, cfg):
         (out["close"].shift(1) > out["bb_upper"].shift(1))
         & (out["close"] <= out["bb_upper"])
     )
-
-    # 9th confluence condition (GLOBAL-100's "Commodity Trends AI"): a
-    # slower, stickier CCI regime, distinct from our existing CCI spike check
-    # (different length, different thresholds, and it holds state instead of
-    # needing to fire on/near the current bar).
-    out["cci_ct_ai"] = cci(out["high"], out["low"], out["close"], cfg.CT_AI_CCI_LENGTH)
-    ct_trend = cci_trend_state(out["cci_ct_ai"], cfg.CT_AI_UPPER, cfg.CT_AI_LOWER)
-    out["ct_ai_bullish"] = ct_trend.apply(lambda v: v is True)
-    out["ct_ai_bearish"] = ct_trend.apply(lambda v: v is False)
 
     return out
