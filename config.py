@@ -36,6 +36,12 @@ STOCH_LONG_THRESHOLD = 20
 STOCH_LONG_D_THRESHOLD = 30.0
 STOCH_SHORT_THRESHOLD = 80
 
+# 9th confluence condition — "Commodity Trends AI" (GLOBAL-100 indicator).
+# Same defaults as the Pine Script: CCI(30), sticky trend flips at +50/-50.
+CT_AI_CCI_LENGTH = 30
+CT_AI_UPPER = 50.0
+CT_AI_LOWER = -50.0
+
 # Historical condition validity
 CCI_VALID_BARS = 3    # was 1 — no longer forces CCI to spike on the exact same candle as the stoch cross
 STOCH_VALID_BARS = 3

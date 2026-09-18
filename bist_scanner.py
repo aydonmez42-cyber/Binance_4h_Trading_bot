@@ -59,6 +59,7 @@ def _reason_map(row):
         'CCI > 100': bool(row.cci > cfg.CCI_LONG_THRESHOLD),
         'Stoch cross': bool(row.stoch_bull_cross),
         'Stoch D > 30': bool(row.stoch_d > cfg.STOCH_LONG_D_THRESHOLD),
+        'Commodity Trends AI bullish': bool(row.ct_ai_bullish),
     }
     short_checks = {
         'EMA100 trend': bool(row.close < row.ema100),
@@ -69,6 +70,7 @@ def _reason_map(row):
         'CCI < -50': bool(row.cci < cfg.CCI_SHORT_THRESHOLD),
         'Stoch cross': bool(row.stoch_bear_cross),
         'Stoch K < 80': bool(row.stoch_k < cfg.STOCH_SHORT_THRESHOLD),
+        'Commodity Trends AI bearish': bool(row.ct_ai_bearish),
     }
     return long_checks, short_checks
 

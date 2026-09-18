@@ -7,7 +7,7 @@ def recent_true(series, current_pos, max_bars):
 
 
 def long_conditions(df, i, cfg):
-    """The 8 scored LONG confluence conditions, as (name, bool) pairs.
+    """The 9 scored LONG confluence conditions, as (name, bool) pairs.
     None of these alone is required anymore — see long_signal()."""
     row = df.iloc[i]
     return [
@@ -19,11 +19,12 @@ def long_conditions(df, i, cfg):
         ("macd_bullish", bool(row["macd_long_ok"])),
         ("cci_breakout_recent", recent_true(df["cci"] > cfg.CCI_LONG_THRESHOLD, i, cfg.CCI_VALID_BARS)),
         ("stoch_cross_recent", recent_true(df["stoch_bull_cross"], i, cfg.STOCH_VALID_BARS) and bool(row["stoch_d"] > cfg.STOCH_LONG_D_THRESHOLD)),
+        ("commodity_trends_ai_bullish", bool(row["ct_ai_bullish"])),
     ]
 
 
 def short_conditions(df, i, cfg):
-    """The 8 scored SHORT confluence conditions, mirroring long_conditions().
+    """The 9 scored SHORT confluence conditions, mirroring long_conditions().
     bb_reentry counts as automatically satisfied while USE_BB_SHORT_FILTER is
     off, so it doesn't unfairly cost the short side a point vs. the long side's
     (always-on) MACD condition."""
@@ -38,6 +39,7 @@ def short_conditions(df, i, cfg):
         ("bb_reentry", bb_ok),
         ("cci_breakdown_recent", recent_true(df["cci"] < cfg.CCI_SHORT_THRESHOLD, i, cfg.CCI_VALID_BARS)),
         ("stoch_cross_recent", recent_true(df["stoch_bear_cross"], i, cfg.STOCH_VALID_BARS) and bool(row["stoch_k"] < cfg.STOCH_SHORT_THRESHOLD)),
+        ("commodity_trends_ai_bearish", bool(row["ct_ai_bearish"])),
     ]
 
 
