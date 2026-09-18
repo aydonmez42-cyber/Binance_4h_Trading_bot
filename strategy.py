@@ -57,7 +57,10 @@ def short_signal(df, i, cfg):
     if i < 1:
         return False
     score = sum(1 for _, ok in short_conditions(df, i, cfg) if ok)
-    return score >= cfg.ENTRY_MIN_SCORE
+    # SHORT gets its own (stricter) threshold: backtests showed shorts losing
+    # money net (PF 0.90) at the same bar the long side was thriving (PF 1.38),
+    # so the two sides no longer share one number here.
+    return score >= cfg.SHORT_ENTRY_MIN_SCORE
 
 
 def supertrend_exit_signal(df, i, position):
