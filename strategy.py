@@ -6,80 +6,58 @@ def recent_true(series, current_pos, max_bars):
     return bool(window.fillna(False).any())
 
 
-def long_signal(df, i, cfg):
+def long_conditions(df, i, cfg):
+    """The 8 scored LONG confluence conditions, as (name, bool) pairs.
+    None of these alone is required anymore — see long_signal()."""
     row = df.iloc[i]
+    return [
+        ("close_above_ema100", bool(row["close"] > row["ema100"])),
+        ("ema50_above_ema100", bool(row["ema50"] > row["ema100"])),
+        ("adx_trending", bool(row["adx"] > cfg.ADX_THRESHOLD)),
+        ("supertrend_bullish", bool(row["supertrend_bullish"])),
+        ("rsi_momentum", bool(row["rsi"] > cfg.RSI_LONG_THRESHOLD)),
+        ("macd_bullish", bool(row["macd_long_ok"])),
+        ("cci_breakout_recent", recent_true(df["cci"] > cfg.CCI_LONG_THRESHOLD, i, cfg.CCI_VALID_BARS)),
+        ("stoch_cross_recent", recent_true(df["stoch_bull_cross"], i, cfg.STOCH_VALID_BARS) and bool(row["stoch_d"] > cfg.STOCH_LONG_D_THRESHOLD)),
+    ]
 
+
+def short_conditions(df, i, cfg):
+    """The 8 scored SHORT confluence conditions, mirroring long_conditions().
+    bb_reentry counts as automatically satisfied while USE_BB_SHORT_FILTER is
+    off, so it doesn't unfairly cost the short side a point vs. the long side's
+    (always-on) MACD condition."""
+    row = df.iloc[i]
+    bb_ok = (not cfg.USE_BB_SHORT_FILTER) or bool(row["bb_short_reentry"])
+    return [
+        ("close_below_ema100", bool(row["close"] < row["ema100"])),
+        ("ema50_below_ema100", bool(row["ema50"] < row["ema100"])),
+        ("adx_trending", bool(row["adx"] > cfg.ADX_THRESHOLD)),
+        ("supertrend_bearish", bool(row["supertrend_bearish"])),
+        ("rsi_momentum", bool(row["rsi"] < cfg.RSI_SHORT_THRESHOLD)),
+        ("bb_reentry", bb_ok),
+        ("cci_breakdown_recent", recent_true(df["cci"] < cfg.CCI_SHORT_THRESHOLD, i, cfg.CCI_VALID_BARS)),
+        ("stoch_cross_recent", recent_true(df["stoch_bear_cross"], i, cfg.STOCH_VALID_BARS) and bool(row["stoch_k"] < cfg.STOCH_SHORT_THRESHOLD)),
+    ]
+
+
+def long_signal(df, i, cfg):
     if i < 1:
         return False
-
-    # EMA50/EMA200 define the main trend regime; Supertrend is the trend filter.
-    if not (row["close"] > row["ema100"]):
-        return False
-    if not (row["ema50"] > row["ema100"]):
-        return False
-    if not (row["adx"] > cfg.ADX_THRESHOLD):
-        return False
-    if not bool(row["supertrend_bullish"]):
-        return False
-    if not (row["rsi"] > cfg.RSI_LONG_THRESHOLD):
-        return False
+    row = df.iloc[i]
+    # Hard safety cap, not scored: never buy into extreme overbought (blow-off
+    # top) regardless of how many other boxes are checked.
     if not (row["rsi"] <= cfg.RSI_LONG_MAX):
         return False
-    if cfg.USE_MACD_LONG_FILTER and not bool(row["macd_long_ok"]):
-        return False
-
-    if not recent_true(
-        df["cci"] > cfg.CCI_LONG_THRESHOLD, i, cfg.CCI_VALID_BARS
-    ):
-        return False
-
-    if not recent_true(
-        df["stoch_bull_cross"], i, cfg.STOCH_VALID_BARS
-    ):
-        return False
-
-    if not (row["stoch_d"] > cfg.STOCH_LONG_D_THRESHOLD):
-        return False
-
-    return True
+    score = sum(1 for _, ok in long_conditions(df, i, cfg) if ok)
+    return score >= cfg.ENTRY_MIN_SCORE
 
 
 def short_signal(df, i, cfg):
-    row = df.iloc[i]
-
     if i < 1:
         return False
-
-    if not (row["close"] < row["ema100"]):
-        return False
-    if not (row["ema50"] < row["ema100"]):
-        return False
-    if not (row["adx"] > cfg.ADX_THRESHOLD):
-        return False
-    if not bool(row["supertrend_bearish"]):
-        return False
-    if not (row["rsi"] < cfg.RSI_SHORT_THRESHOLD):
-        return False
-
-    # Bollinger short filter disabled for this test.
-    # 
-    if cfg.USE_BB_SHORT_FILTER and not bool(row["bb_short_reentry"]):
-        return False
-
-    if not recent_true(
-        df["cci"] < cfg.CCI_SHORT_THRESHOLD, i, cfg.CCI_VALID_BARS
-    ):
-        return False
-
-    if not recent_true(
-        df["stoch_bear_cross"], i, cfg.STOCH_VALID_BARS
-    ):
-        return False
-
-    if not (row["stoch_k"] < cfg.STOCH_SHORT_THRESHOLD):
-        return False
-
-    return True
+    score = sum(1 for _, ok in short_conditions(df, i, cfg) if ok)
+    return score >= cfg.ENTRY_MIN_SCORE
 
 
 def supertrend_exit_signal(df, i, position):

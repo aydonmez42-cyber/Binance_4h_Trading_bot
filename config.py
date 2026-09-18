@@ -10,7 +10,7 @@ INTERVAL = "4h"
 EMA_FAST = 50
 EMA_SLOW = 200
 ADX_LENGTH = 14
-ADX_THRESHOLD = 25
+ADX_THRESHOLD = 20   # was 25 — ADX lags; 25 waited for the trend to be fully established
 
 # Supertrend filter
 SUPERTREND_PERIOD = 10
@@ -23,8 +23,8 @@ CCI_LENGTH = 20
 CCI_LONG_THRESHOLD = 100.0
 CCI_SHORT_THRESHOLD = -50
 RSI_LENGTH = 14
-RSI_LONG_THRESHOLD = 55
-RSI_LONG_MAX = 72.0
+RSI_LONG_THRESHOLD = 52   # was 55 — catches momentum a bit earlier
+RSI_LONG_MAX = 72.0       # kept as a hard, non-scored overbought cap (see strategy.py)
 RSI_SHORT_THRESHOLD = 30
 
 STOCH_RSI_RSI_LENGTH = 14
@@ -36,8 +36,14 @@ STOCH_LONG_D_THRESHOLD = 30.0
 STOCH_SHORT_THRESHOLD = 80
 
 # Historical condition validity
-CCI_VALID_BARS = 1
+CCI_VALID_BARS = 3    # was 1 — no longer forces CCI to spike on the exact same candle as the stoch cross
 STOCH_VALID_BARS = 3
+
+# Entry scoring — as of this test, long_signal/short_signal no longer require
+# ALL 8 confluence conditions (see strategy.py long_conditions/short_conditions);
+# this many of the 8 must be true. The RSI overbought cap remains a separate,
+# always-hard safety veto and is not part of this count.
+ENTRY_MIN_SCORE = 6
 
 # ATR risk / exit model
 ATR_LENGTH = 14
@@ -78,14 +84,15 @@ EQUITY_CSV = "backtest_equity.csv"
 MACD_FAST_LENGTH = 12
 MACD_SLOW_LENGTH = 26
 MACD_SIGNAL_LENGTH = 9
-USE_MACD_LONG_FILTER = True
+USE_MACD_LONG_FILTER = True   # NOTE: no longer read as a hard gate — macd_bullish
+                               # is now always one of the 8 scored LONG conditions.
 
 
 # FINAL PAPER V1 — Daily volatility veto
 VOLATILITY_ATR_LENGTH = 14
 VOLATILITY_PERCENTILE_LENGTH = 365
 VOLATILITY_LOW_PERCENTILE = 10.0
-VOLATILITY_HIGH_PERCENTILE = 90.0
+VOLATILITY_HIGH_PERCENTILE = 95.0   # was 90 — strong trend days are often high-volatility days; don't veto as many of them
 USE_VOLATILE_FILTER = True
 
 # Watchlist — symbols manually added from the scanner ("+ Ekle"). Same
