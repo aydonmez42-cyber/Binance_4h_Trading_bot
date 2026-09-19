@@ -10,6 +10,7 @@ from strategy import long_signal, short_signal
 from dashboard import start_dashboard
 from telegram_notifier import send_message, entry_message, exit_message, daily_report, verify_connection
 from state_store import load_state as _load_state, save_state, STATE_FILE, TRADES_FILE
+import ai_analyst
 import threading
 
 POLL_SECONDS = int(os.environ.get('POLL_SECONDS', '30'))
@@ -377,6 +378,13 @@ def main():
                     state['last_daily_report_date'] = report_date
                     save_state(state)
                     print(f'TELEGRAM | daily report sent | {report_date} 09:00 Europe/Istanbul', flush=True)
+            # AI Trade Analyst — read-only, gated internally (weekly + min new trades).
+            # Never touches position/config state; wrapped so a failure here can never
+            # affect the trading loop.
+            try:
+                ai_analyst.maybe_run_analysis(state, now)
+            except Exception as e:
+                print(f'AI_ANALYST | ERROR | {type(e).__name__}: {e}', flush=True)
             state['market_prices'] = {
                 'ETHUSDT': float(short_df.iloc[-1]['close']),
                 'ETHUSD_PERP': float(long_df.iloc[-1]['close'])

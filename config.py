@@ -114,3 +114,13 @@ USE_VOLATILE_FILTER = True
 # instead of a fixed coin quantity, since altcoin prices vary hugely.
 WATCHLIST_POSITION_USD = 250.0
 WATCHLIST_MAX_SYMBOLS = 10
+
+# AI Trade Analyst — read-only, periodic LLM-written report on the bot's own
+# closed-trade history. It NEVER opens/closes positions and NEVER changes any
+# parameter above; it only writes a text summary to state + Telegram. Needs
+# ANTHROPIC_API_KEY in the environment; auto-disables without it.
+AI_ANALYST_ENABLED = True
+AI_ANALYST_MODEL = "claude-sonnet-5"
+AI_ANALYST_MIN_INTERVAL_HOURS = 168   # weekly
+AI_ANALYST_MIN_NEW_TRADES = 3
+AI_ANALYST_LOOKBACK_TRADES = 40

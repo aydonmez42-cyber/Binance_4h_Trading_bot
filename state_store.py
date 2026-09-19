@@ -31,6 +31,8 @@ def _defaults(starting_equity=10000.0):
         'signals': {},
         'last_heartbeat': None,
         'last_daily_report_date': None,
+        'ai_analysis': None,           # last AI Trade Analyst result dict (read-only)
+        'ai_analyst_last_run': None,   # {'at': iso, 'total_trades': int} gating info
     }
 
 

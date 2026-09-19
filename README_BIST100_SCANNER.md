@@ -4,7 +4,7 @@ Bu modül mevcut TEST32 RSI72 teknik sinyal mantığını BIST_TUM hisselerinde 
 
 ## Kurallar
 - 4H kapalı mum kullanılır.
-- EMA50 / EMA200 trend filtresi
+- EMA50 / EMA100 trend filtresi
 - Supertrend 10 / 7.8 trend filtresi
 - ADX > 25
 - LONG RSI >55 ve <=72

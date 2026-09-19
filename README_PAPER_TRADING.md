@@ -67,7 +67,7 @@ Telegram mesajları plain text gönderilir; HTML/Markdown parse hataları nedeni
 - Long execution: ETHUSD_PERP
 - Short execution: ETHUSDT
 - Fixed 1 ETH
-- EMA 50/200
+- EMA 50/100
 - Supertrend 10/7.8
 - ADX >25
 - RSI Long >55 / Short <30

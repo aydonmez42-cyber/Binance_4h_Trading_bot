@@ -11,6 +11,7 @@ from state_store import (
     add_to_watchlist as _add_to_watchlist,
     remove_from_watchlist as _remove_from_watchlist,
 )
+import ai_analyst
 
 PORT = int(os.environ.get('PORT', '8080'))
 STARTING_EQUITY = float(os.environ.get('PAPER_INITIAL_CAPITAL', str(cfg.INITIAL_CAPITAL)))
@@ -147,6 +148,9 @@ th.sort-active{color:var(--accent)}
 .add-btn{background:var(--accent-soft);color:var(--accent);border:1px solid #4a3d22;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font-d);white-space:nowrap}
 .add-btn:hover{background:var(--accent);color:#1a1406}
 .add-btn:disabled{opacity:.55;cursor:default}
+.ai-body{padding:16px 18px;font-size:13px;line-height:1.65;color:var(--text);white-space:pre-wrap}
+.ai-meta{color:var(--text-faint);font-size:11.5px;margin-bottom:10px}
+.ai-disabled{color:var(--text-dim);font-size:13px}
 .added-tag{color:var(--bull);font-size:11px;font-weight:700;font-family:var(--font-m);white-space:nowrap}
 .watchlist-empty{color:var(--text-dim);font-size:13px;padding:4px 0}
 .page-footer{text-align:center;color:var(--text-faint);font-size:11.5px;margin-top:6px}
@@ -206,6 +210,11 @@ th.sort-active{color:var(--accent)}
       <tbody id="history"><tr><td colspan="7" class="empty">Yükleniyor…</td></tr></tbody>
     </table>
   </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>AI Trade Analisti</h2><button class="btn" id="aiRunBtn" onclick="runAiAnalysis()">Şimdi Analiz Et</button></div>
+  <div class="ai-body" id="aiAnalysisBody">Yükleniyor…</div>
 </section>
 
 <section class="panel">
@@ -519,6 +528,25 @@ async function refresh(){
 }
 refresh();setInterval(refresh,5000);
 refreshWatchlist();setInterval(refreshWatchlist,10000);
+
+async function refreshAiAnalysis(){
+  let d;
+  try{ const r=await fetch('/api/ai-analysis',{cache:'no-store'}); d=await r.json(); }catch(e){ return; }
+  const body=document.getElementById('aiAnalysisBody');
+  if(!d.enabled){ body.innerHTML='<div class="ai-disabled">AI Analist devre dışı — ANTHROPIC_API_KEY tanımlı değil.</div>'; return; }
+  const a=d.analysis;
+  if(!a || !a.ok){ body.innerHTML='<div class="ai-disabled">Henüz bir analiz üretilmedi. '+(a&&a.error?('Son deneme: '+a.error):'"Şimdi Analiz Et" ile ilk raporu oluşturabilirsiniz.')+'</div>'; return; }
+  const meta=`<div class="ai-meta">${(a.generated_at||'').replace('T',' ').slice(0,16)} &middot; ${a.trades_analyzed} işlem incelendi (toplam ${a.total_trades_all_time})</div>`;
+  body.innerHTML=meta+'<div>'+a.text.replace(/</g,'&lt;')+'</div>';
+}
+async function runAiAnalysis(){
+  const btn=document.getElementById('aiRunBtn');
+  btn.disabled=true; btn.textContent='Analiz ediliyor…';
+  try{ await fetch('/api/ai-analysis/run',{cache:'no-store'}); }catch(e){}
+  await refreshAiAnalysis();
+  btn.disabled=false; btn.textContent='Şimdi Analiz Et';
+}
+refreshAiAnalysis();setInterval(refreshAiAnalysis,60000);
 </script></body></html>'''
 
 def read_state():
@@ -630,6 +658,11 @@ class Handler(BaseHTTPRequestHandler):
             symbol=(q.get('symbol',[''])[0] or '').strip().upper()
             if symbol: _remove_from_watchlist(symbol)
             body=json.dumps({'ok':bool(symbol)}).encode(); self.send_response(200); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
+        if path=='/api/ai-analysis':
+            body=json.dumps(ai_analyst.get_status(),ensure_ascii=False).encode(); self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
+        if path=='/api/ai-analysis/run':
+            result=ai_analyst.run_now()
+            body=json.dumps(result,ensure_ascii=False).encode(); self.send_response(200 if result.get('ok') else 400); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         body=HTML.encode(); self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body)
     def log_message(self,*args):return
 
