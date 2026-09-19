@@ -266,11 +266,30 @@ def run_watchlist_symbol(state, symbol, now):
     go_short = short_signal(enriched, i, cfg)
     blocked = cfg.USE_VOLATILE_FILTER and volatile_now
 
+    def _fmt(v):
+        try:
+            return round(float(v), 4)
+        except Exception:
+            return None
+
+    final_signal = 'VOLATILE_BLOCK' if blocked else ('LONG' if go_long else ('SHORT' if go_short else 'NONE'))
     state.setdefault('watchlist_signals', {})[symbol] = {
         'price': float(df.iloc[-1]['close']),
-        'final': 'VOLATILE_BLOCK' if blocked else ('LONG' if go_long else ('SHORT' if go_short else 'NONE')),
+        'final': final_signal,
         'atrp_percentile_1d': atrp_pct,
         'updated_at': now.isoformat(),
+        # Same shape as the main ETH engine's state['signals'], so the dashboard
+        # can show an identical detail card for any watchlist crypto symbol.
+        'indicators': {
+            'ema': 'BULLISH' if float(latest.get('ema_fast', 0)) > float(latest.get('ema_slow', 0)) else 'BEARISH',
+            'supertrend': 'BULLISH' if bool(latest.get('supertrend_direction', False)) else 'BEARISH',
+            'adx': _fmt(latest.get('adx')), 'rsi': _fmt(latest.get('rsi')),
+            'cci': _fmt(latest.get('cci')), 'stoch': 'K/D loaded',
+            'macd': 'BULLISH' if float(latest.get('macd', 0)) > float(latest.get('macd_signal', 0)) and float(latest.get('macd_hist', 0)) > 0 else 'BEARISH',
+            'volatility': 'BLOCKED' if blocked else 'OK',
+            'atrp_percentile_1d': _fmt(atrp_pct),
+            'final': final_signal,
+        },
     }
 
     # Manage an existing paper position first, on the live (still-forming) candle.
@@ -312,6 +331,16 @@ def sync_bist_watchlist_signals(state, now):
         state.setdefault('watchlist_signals', {})[symbol] = {
             'price': r.get('price'), 'final': r.get('signal'),
             'atrp_percentile_1d': r.get('atrp_percentile_1d'), 'updated_at': now.isoformat(),
+            # BIST scanner doesn't compute EMA/volatility-veto fields, so those two
+            # keys are simply absent here; the dashboard shows '—' for them.
+            'indicators': {
+                'supertrend': 'BULLISH' if r.get('st') == 'BULL' else ('BEARISH' if r.get('st') == 'BEAR' else None),
+                'adx': r.get('adx'), 'rsi': r.get('rsi'), 'cci': r.get('cci'),
+                'stoch': f"{r.get('stoch_k','—')} / {r.get('stoch_d','—')}",
+                'macd': 'BULLISH' if r.get('macd') == 'BULL' else ('BEARISH' if r.get('macd') == 'BEAR' else None),
+                'atrp_percentile_1d': r.get('atrp_percentile_1d'),
+                'final': r.get('signal'),
+            },
         }
         changed = True
     if changed:

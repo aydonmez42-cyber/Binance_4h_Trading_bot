@@ -18,7 +18,7 @@ STARTING_EQUITY = float(os.environ.get('PAPER_INITIAL_CAPITAL', str(cfg.INITIAL_
 
 HTML = r'''<!doctype html>
 <html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>FINAL V1 — Trading Terminal</title>
+<title>A&amp;I Trading Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -153,6 +153,9 @@ th.sort-active{color:var(--accent)}
 .ai-disabled{color:var(--text-dim);font-size:13px}
 .added-tag{color:var(--bull);font-size:11px;font-weight:700;font-family:var(--font-m);white-space:nowrap}
 .watchlist-empty{color:var(--text-dim);font-size:13px;padding:4px 0}
+.row-clickable{cursor:pointer}
+.row-clickable:hover{background:var(--panel-2)}
+.row-selected{background:var(--panel-2)!important;box-shadow:inset 3px 0 0 var(--accent)}
 .page-footer{text-align:center;color:var(--text-faint);font-size:11.5px;margin-top:6px}
 
 @media(max-width:900px){.cols{grid-template-columns:1fr}.pos-grid{grid-template-columns:1fr 1fr}.chip-grid{grid-template-columns:1fr}}
@@ -164,8 +167,8 @@ th.sort-active{color:var(--accent)}
   <div class="brand">
     <span class="brand-mark"></span>
     <div>
-      <div class="brand-name">FINAL V1</div>
-      <div class="brand-sub">ETH · 4H strateji &middot; XUTUM ve Binance Futures tarayıcı &middot; paper trading</div>
+      <div class="brand-name">A&amp;I Trading Terminal</div>
+      <div class="brand-sub">Welcome to AI Trading Platform</div>
     </div>
   </div>
   <div class="topbar-right">
@@ -182,7 +185,7 @@ th.sort-active{color:var(--accent)}
     <svg class="sparkline" id="sparkline" viewBox="0 0 200 30" preserveAspectRatio="none"></svg>
   </div>
   <div class="kpi-divider"></div>
-  <div class="kpi"><div class="kpi-label">ETH fiyatı</div><div class="kpi-value" id="price">—</div><div class="kpi-sub" id="priceTime">—</div></div>
+  <div class="kpi"><div class="kpi-label">Açık pozisyonlar P&amp;L</div><div class="kpi-value" id="openPnl">—</div><div class="kpi-sub" id="openPnlSub">—</div></div>
   <div class="kpi-divider"></div>
   <div class="kpi"><div class="kpi-label">İşlem &middot; kazanma oranı</div><div class="kpi-value" id="trades">—</div><div class="kpi-sub" id="winrate">—</div></div>
   <div class="kpi-divider"></div>
@@ -191,9 +194,20 @@ th.sort-active{color:var(--accent)}
   <div class="kpi"><div class="kpi-label">Maks. drawdown</div><div class="kpi-value" id="dd">—</div><div class="kpi-sub" id="candle">—</div></div>
 </section>
 
+<section class="panel">
+  <div class="panel-head"><h2>Takip listesi</h2><span class="text-faint" id="watchlistCount">0 / 10</span></div>
+  <div class="table-scroll">
+    <table class="datatable">
+      <thead><tr><th>Sembol</th><th>Piyasa</th><th>Yön / Sinyal</th><th class="num">Fiyat</th><th class="num">Unrealized P&amp;L</th><th>Eklenme</th><th></th></tr></thead>
+      <tbody id="watchlistRows"><tr><td colspan="7" class="empty">Yükleniyor…</td></tr></tbody>
+    </table>
+  </div>
+  <div class="footnote">Bir satıra tıklayarak o sembolün pozisyon ve sinyal detayını aşağıda görüntüleyebilirsiniz. Kripto sembolleri aynı strateji ile bağımsız bir paper pozisyon açar (boyut: $<span id="wlUsd">—</span> nominal). XUTUM sembolleri yalnızca sinyal takibidir; gerçek/paper emir açılmaz.</div>
+</section>
+
 <section class="cols">
   <div class="panel">
-    <div class="panel-head"><h2>Açık pozisyon</h2></div>
+    <div class="panel-head"><h2>Açık pozisyon <span class="text-faint" id="detailSymbol">— ETHUSDT</span></h2></div>
     <div class="position-body" id="position">Yükleniyor…</div>
   </div>
   <div class="panel">
@@ -215,17 +229,6 @@ th.sort-active{color:var(--accent)}
 <section class="panel">
   <div class="panel-head"><h2>AI Trade Analisti</h2><button class="btn" id="aiRunBtn" onclick="runAiAnalysis()">Şimdi Analiz Et</button></div>
   <div class="ai-body" id="aiAnalysisBody">Yükleniyor…</div>
-</section>
-
-<section class="panel">
-  <div class="panel-head"><h2>Takip listesi</h2><span class="text-faint" id="watchlistCount">0 / 10</span></div>
-  <div class="table-scroll">
-    <table class="datatable">
-      <thead><tr><th>Sembol</th><th>Piyasa</th><th>Yön / Sinyal</th><th class="num">Fiyat</th><th class="num">Unrealized P&amp;L</th><th>Eklenme</th><th></th></tr></thead>
-      <tbody id="watchlistRows"><tr><td colspan="7" class="empty">Yükleniyor…</td></tr></tbody>
-    </table>
-  </div>
-  <div class="footnote">Kripto sembolleri aynı strateji ile bağımsız bir paper pozisyon açar (boyut: $<span id="wlUsd">—</span> nominal). XUTUM sembolleri yalnızca sinyal takibidir; gerçek/paper emir açılmaz.</div>
 </section>
 
 <section class="panel scanner-panel">
@@ -337,15 +340,86 @@ function drawSparkline(values){
   svg.innerHTML=`<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>`;
 }
 
+function renderPositionCard(posEl,p){
+  if(!p){
+    posEl.innerHTML='<div class="pos-top"><span class="side-tag" style="background:var(--neu-bg);color:var(--text-dim);border:1px solid var(--border-soft)">FLAT</span></div><div class="pos-empty">Açık paper pozisyon yok. Sinyal oluştuğunda burada görünecek.</div>';
+    return;
+  }
+  const sideCls=p.side==='LONG'?'long':'short';
+  const pnl=p.unrealized_pnl;
+  const stop=Number(p.active_stop),tp=Number(p.tp),cur=Number(p.current_price),entry=Number(p.entry_price);
+  const vals=[stop,tp,cur,entry].filter(v=>!isNaN(v));
+  const lo=Math.min(...vals),hi=Math.max(...vals),span=(hi-lo)||1;
+  const pct=v=>((v-lo)/span*100).toFixed(1);
+  posEl.innerHTML=`
+    <div class="pos-top"><span class="side-tag ${sideCls}">${p.side}</span><span class="pos-symbol">${p.symbol}</span></div>
+    <div class="pos-grid">
+      <div><div class="kpi-label">Giriş</div><div class="val">${num(entry)}</div></div>
+      <div><div class="kpi-label">Güncel</div><div class="val">${num(cur)}</div></div>
+      <div><div class="kpi-label">Unrealized P&amp;L</div><div class="val ${cls(pnl)}">${money(pnl)}</div></div>
+      <div><div class="kpi-label">ATR</div><div class="val">${num(p.atr)}</div></div>
+    </div>
+    <div class="bar-wrap">
+      <div class="bar-labels"><span>SL ${num(stop)}</span><span>TP ${num(tp)}</span></div>
+      <div class="bar-track">
+        <div class="bar-fill" style="left:0%;right:0%"></div>
+        <div class="bar-dot sl" style="left:${pct(stop)}%"></div>
+        <div class="bar-dot tp" style="left:${pct(tp)}%"></div>
+        <div class="bar-dot cur" style="left:${pct(cur)}%" title="Güncel fiyat"></div>
+      </div>
+    </div>
+    <div class="pos-foot">Trailing: ${p.trail_active?('AKTİF @ '+num(p.trail_stop)):'beklemede'} &middot; Giriş zamanı: ${p.entry_time}</div>`;
+}
+function renderSignalCard(sigEl,s){
+  s=s||{};
+  const rows=[['EMA 50 / 100',s.ema],['Supertrend',s.supertrend],['ADX',s.adx],['RSI',s.rsi],['CCI',s.cci],['Stoch RSI',s.stoch],['MACD',s.macd],['1D Volatilite',s.volatility],['1D ATRP %ile',s.atrp_percentile_1d]];
+  sigEl.innerHTML=
+    '<div class="chip-grid">'+
+    rows.map(r=>`<div class="chip"><span class="chip-label">${r[0]}</span><span class="chip-value ${chipClass(r[1])}">${r[1]??'—'}</span></div>`).join('')+
+    `<div class="chip final"><span class="chip-label">Son sinyal</span><span class="chip-value ${chipClass(s.final)}">${s.final??'—'}</span></div>`+
+    '</div>';
+}
+
+let statusCache=null;
+let watchlistCache={items:[]};
+let selectedSymbol='ETHUSDT';
+
+function selectSymbol(symbol){
+  selectedSymbol=symbol;
+  renderDetail();
+  renderWatchlistTable();
+}
+
+function renderDetail(){
+  const posEl=document.getElementById('position');
+  const sigEl=document.getElementById('signals');
+  document.getElementById('detailSymbol').textContent='— '+selectedSymbol;
+  if(selectedSymbol==='ETHUSDT'){
+    if(!statusCache){posEl.innerHTML='Yükleniyor…';sigEl.innerHTML='—';return;}
+    renderPositionCard(posEl,statusCache.position);
+    renderSignalCard(sigEl,statusCache.signals);
+    return;
+  }
+  const item=(watchlistCache.items||[]).find(x=>x.symbol===selectedSymbol);
+  if(!item){
+    posEl.innerHTML='<div class="pos-empty">Bu sembol takip listesinden kaldırılmış olabilir.</div>';
+    sigEl.innerHTML='—';
+    return;
+  }
+  renderPositionCard(posEl,item.position);
+  renderSignalCard(sigEl,item.indicators);
+}
+
 function render(d){
+  statusCache=d;
   const st=document.getElementById('status');
   if(d.bot_alive){st.className='status-pill live';st.innerHTML='<span class="dot"></span>Bot aktif';}
   else{st.className='status-pill wait';st.innerHTML='<span class="dot"></span>Beklemede';}
 
   document.getElementById('equity').textContent=money(d.equity);
   document.getElementById('pnl').innerHTML=`<span class="${cls(d.net_pnl)}">${money(d.net_pnl)}</span> &middot; ${Number(d.return_pct||0).toFixed(2)}%`;
-  document.getElementById('price').textContent=money(d.price);
-  document.getElementById('priceTime').textContent=d.price_time||'—';
+  document.getElementById('openPnl').innerHTML=`<span class="${cls(d.total_open_pnl)}">${money(d.total_open_pnl)}</span>`;
+  document.getElementById('openPnlSub').textContent='Tüm açık pozisyonlar';
   document.getElementById('trades').textContent=d.stats.trades;
   document.getElementById('winrate').textContent='Win rate '+d.stats.win_rate.toFixed(2)+'%';
   document.getElementById('pf').textContent=d.stats.profit_factor.toFixed(3);
@@ -357,46 +431,10 @@ function render(d){
   if(eqSeries.length<2 && d.equity!=null) eqSeries.push(Number(d.equity));
   drawSparkline(eqSeries);
 
-  const p=d.position;
-  const posEl=document.getElementById('position');
-  if(!p){
-    posEl.innerHTML='<div class="pos-top"><span class="side-tag" style="background:var(--neu-bg);color:var(--text-dim);border:1px solid var(--border-soft)">FLAT</span></div><div class="pos-empty">Açık paper pozisyon yok. Sinyal oluştuğunda burada görünecek.</div>';
-  } else {
-    const sideCls=p.side==='LONG'?'long':'short';
-    const pnl=p.unrealized_pnl;
-    const stop=Number(p.active_stop),tp=Number(p.tp),cur=Number(p.current_price),entry=Number(p.entry_price);
-    const vals=[stop,tp,cur,entry].filter(v=>!isNaN(v));
-    const lo=Math.min(...vals),hi=Math.max(...vals),span=(hi-lo)||1;
-    const pct=v=>((v-lo)/span*100).toFixed(1);
-    posEl.innerHTML=`
-      <div class="pos-top"><span class="side-tag ${sideCls}">${p.side}</span><span class="pos-symbol">${p.symbol}</span></div>
-      <div class="pos-grid">
-        <div><div class="kpi-label">Giriş</div><div class="val">${num(entry)}</div></div>
-        <div><div class="kpi-label">Güncel</div><div class="val">${num(cur)}</div></div>
-        <div><div class="kpi-label">Unrealized P&amp;L</div><div class="val ${cls(pnl)}">${money(pnl)}</div></div>
-        <div><div class="kpi-label">ATR</div><div class="val">${num(p.atr)}</div></div>
-      </div>
-      <div class="bar-wrap">
-        <div class="bar-labels"><span>SL ${num(stop)}</span><span>TP ${num(tp)}</span></div>
-        <div class="bar-track">
-          <div class="bar-fill" style="left:0%;right:0%"></div>
-          <div class="bar-dot sl" style="left:${pct(stop)}%"></div>
-          <div class="bar-dot tp" style="left:${pct(tp)}%"></div>
-          <div class="bar-dot cur" style="left:${pct(cur)}%" title="Güncel fiyat"></div>
-        </div>
-      </div>
-      <div class="pos-foot">Trailing: ${p.trail_active?('AKTİF @ '+num(p.trail_stop)):'beklemede'} &middot; Giriş zamanı: ${p.entry_time}</div>`;
-  }
-
-  const s=d.signals||{};
-  const rows=[['EMA 50 / 100',s.ema],['Supertrend',s.supertrend],['ADX',s.adx],['RSI',s.rsi],['CCI',s.cci],['Stoch RSI',s.stoch],['MACD',s.macd],['1D Volatilite',s.volatility],['1D ATRP %ile',s.atrp_percentile_1d]];
-  document.getElementById('signals').innerHTML=
-    '<div class="chip-grid">'+
-    rows.map(r=>`<div class="chip"><span class="chip-label">${r[0]}</span><span class="chip-value ${chipClass(r[1])}">${r[1]??'—'}</span></div>`).join('')+
-    `<div class="chip final"><span class="chip-label">Son sinyal</span><span class="chip-value ${chipClass(s.final)}">${s.final??'—'}</span></div>`+
-    '</div>';
-
   document.getElementById('history').innerHTML=(d.history||[]).map(t=>`<tr><td>${t.exit_time||'—'}</td><td><span class="pill ${String(t.side).toLowerCase()}">${t.side}</span></td><td>${t.symbol}</td><td class="num">${num(t.entry_price)}</td><td class="num">${num(t.exit_price)}</td><td class="num ${cls(t.net_pnl)}"><b>${money(t.net_pnl)}</b></td><td class="wrap-cell">${t.reason||''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Henüz kapanmış işlem yok.</td></tr>';
+
+  renderWatchlistTable();
+  if(selectedSymbol==='ETHUSDT') renderDetail();
 }
 
 function switchTab(name){
@@ -426,14 +464,25 @@ async function removeFromWatchlist(symbol){
   try{ await fetch(`/api/watchlist/remove?symbol=${encodeURIComponent(symbol)}`,{cache:'no-store'}); }catch(e){}
   await refreshWatchlist();
 }
-async function refreshWatchlist(){
-  let d;
-  try{ const r=await fetch('/api/watchlist',{cache:'no-store'}); d=await r.json(); }catch(e){ return; }
+function renderWatchlistTable(){
+  const d=watchlistCache;
   document.getElementById('wlUsd').textContent=Number(d.position_usd||0).toLocaleString('en-US');
   const items=d.items||[];
   watchlistSymbols=new Set(items.map(x=>x.symbol));
   document.getElementById('watchlistCount').textContent=`${items.length} / ${d.max_symbols??'—'}`;
-  document.getElementById('watchlistRows').innerHTML=items.length?items.map(x=>{
+
+  // Pinned row for the main ETH engine — always present, never removable, and
+  // clickable just like any other tracked symbol.
+  let rowsHtml='';
+  if(statusCache){
+    const p=statusCache.position;
+    const sideCell=p?`<span class="pill ${p.side.toLowerCase()}">${p.side}</span>`:sigPill((statusCache.signals&&statusCache.signals.final)||'NO SIGNAL');
+    const pnlCell=p?`<span class="${cls(p.unrealized_pnl)}">${money(p.unrealized_pnl)}</span>`:'<span class="text-faint">pozisyon yok</span>';
+    const sel=selectedSymbol==='ETHUSDT'?' row-selected':'';
+    rowsHtml+=`<tr class="row-clickable${sel}" onclick="selectSymbol('ETHUSDT')"><td><b>ETHUSDT</b></td><td>Binance</td><td>${sideCell}</td><td class="num">${num(p?p.current_price:statusCache.price)}</td><td class="num">${pnlCell}</td><td class="text-faint">Ana motor</td><td></td></tr>`;
+  }
+
+  rowsHtml+=items.map(x=>{
     const p=x.position;
     let sideCell, pnlCell;
     if(p){
@@ -444,8 +493,19 @@ async function refreshWatchlist(){
       pnlCell=x.market==='bist'?'<span class="text-faint">izleniyor</span>':'<span class="text-faint">pozisyon yok</span>';
     }
     const added=(x.added_at||'').replace('T',' ').slice(0,16);
-    return `<tr><td><b>${x.symbol}</b></td><td>${x.market==='bist'?'XUTUM':'Binance'}</td><td>${sideCell}</td><td class="num">${num(p?p.current_price:x.current_price)}</td><td class="num">${pnlCell}</td><td class="text-faint">${added}</td><td><button class="btn" onclick="removeFromWatchlist('${x.symbol}')">Kaldır</button></td></tr>`;
-  }).join(''):'<tr><td colspan="7" class="watchlist-empty">Takip listesi boş. Tarayıcıda LONG/SHORT veren bir sembole "+ Ekle" diyerek botun izlemesini/paper trade etmesini sağlayabilirsin.</td></tr>';
+    const sel=selectedSymbol===x.symbol?' row-selected':'';
+    return `<tr class="row-clickable${sel}" onclick="selectSymbol('${x.symbol}')"><td><b>${x.symbol}</b></td><td>${x.market==='bist'?'XUTUM':'Binance'}</td><td>${sideCell}</td><td class="num">${num(p?p.current_price:x.current_price)}</td><td class="num">${pnlCell}</td><td class="text-faint">${added}</td><td><button class="btn" onclick="event.stopPropagation();removeFromWatchlist('${x.symbol}')">Kaldır</button></td></tr>`;
+  }).join('');
+
+  document.getElementById('watchlistRows').innerHTML=rowsHtml||'<tr><td colspan="7" class="watchlist-empty">Takip listesi boş. Tarayıcıda LONG/SHORT veren bir sembole "+ Ekle" diyerek botun izlemesini/paper trade etmesini sağlayabilirsin.</td></tr>';
+}
+
+async function refreshWatchlist(){
+  let d;
+  try{ const r=await fetch('/api/watchlist',{cache:'no-store'}); d=await r.json(); }catch(e){ return; }
+  watchlistCache=d;
+  renderWatchlistTable();
+  if(selectedSymbol!=='ETHUSDT') renderDetail();
   renderScanner(); renderBistScanner();
 }
 
@@ -580,14 +640,21 @@ def status():
     peak=start; maxdd=0
     for t in closed:
         e=f(t.get('equity_after',start)); peak=max(peak,e); maxdd=min(maxdd,(e/peak-1)*100 if peak else 0)
-    p=s.get('position'); pos=None
+    p=s.get('position'); pos=None; total_open_pnl=0.0
     if p:
         cp=f(s.get('market_prices',{}).get(p.get('symbol'),p.get('entry_price')))
         qty=f(p.get('qty_eth',1)); ep=f(p.get('entry_price')); unreal=(cp-ep)*qty if p.get('side')=='LONG' else (ep-cp)*qty
         active=f(p.get('trail_stop')) if p.get('trail_active') and p.get('trail_stop') is not None else f(p.get('sl'))
         pos={**p,'current_price':cp,'unrealized_pnl':unreal,'active_stop':active}
+        total_open_pnl+=unreal
+    for wsym, wp in (s.get('positions', {}) or {}).items():
+        wsig=(s.get('watchlist_signals', {}) or {}).get(wsym, {})
+        cp=f(wsig.get('price', wp.get('entry_price')))
+        qty=f(wp.get('qty_eth', 0)); ep=f(wp.get('entry_price'))
+        unreal=(cp-ep)*qty if wp.get('side')=='LONG' else (ep-cp)*qty
+        total_open_pnl+=unreal
     indicators=s.get('indicators',{})
-    return {'bot_alive': bool(s.get('last_heartbeat')),'heartbeat':s.get('last_heartbeat'),'equity':equity,'net_pnl':net,'return_pct':net/start*100,'price':f(s.get('market_prices',{}).get('ETHUSDT',0)),'price_time':s.get('market_price_time'),'last_closed_time':s.get('last_closed_time'),'position':pos,'signals':s.get('signals',indicators),'stats':{'trades':len(closed),'wins':wins,'losses':losses,'win_rate':wins/len(closed)*100 if closed else 0,'profit_factor':pf,'avg_trade':avg,'max_drawdown':maxdd},'history':list(reversed(closed[-20:]))}
+    return {'bot_alive': bool(s.get('last_heartbeat')),'heartbeat':s.get('last_heartbeat'),'equity':equity,'net_pnl':net,'return_pct':net/start*100,'price':f(s.get('market_prices',{}).get('ETHUSDT',0)),'price_time':s.get('market_price_time'),'last_closed_time':s.get('last_closed_time'),'position':pos,'signals':s.get('signals',indicators),'total_open_pnl':total_open_pnl,'stats':{'trades':len(closed),'wins':wins,'losses':losses,'win_rate':wins/len(closed)*100 if closed else 0,'profit_factor':pf,'avg_trade':avg,'max_drawdown':maxdd},'history':list(reversed(closed[-20:]))}
 
 def watchlist_status():
     s = read_state()
@@ -610,6 +677,7 @@ def watchlist_status():
             'added_signal': w.get('added_signal'), 'current_signal': sig.get('final'),
             'current_price': sig.get('price'), 'atrp_percentile_1d': sig.get('atrp_percentile_1d'),
             'updated_at': sig.get('updated_at'), 'position': pos,
+            'indicators': sig.get('indicators'),
         })
     items.sort(key=lambda x: x.get('added_at') or '', reverse=True)
     return {'items': items, 'max_symbols': cfg.WATCHLIST_MAX_SYMBOLS, 'position_usd': cfg.WATCHLIST_POSITION_USD}
