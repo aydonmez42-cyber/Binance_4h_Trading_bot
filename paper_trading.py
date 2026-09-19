@@ -6,6 +6,7 @@ import pandas as pd
 import config as cfg
 from indicators import add_indicators
 from regime import is_volatile_daily
+from tradingview_data import add_close_time
 from strategy import long_signal, short_signal
 from dashboard import start_dashboard
 from telegram_notifier import send_message, entry_message, exit_message, daily_report, verify_connection
@@ -312,6 +313,91 @@ def run_watchlist_symbol(state, symbol, now):
     save_state(state)
 
 
+def run_us_stock_watchlist_symbol(state, symbol, now):
+    """Manage a paper position for one manually-added US stock (S&P 500 /
+    Nasdaq-100) watchlist symbol, using the exact same strategy/indicators as
+    the main ETH engine, sourced from TradingView (NASDAQ/NYSE/AMEX
+    auto-detected per symbol) instead of Binance klines.
+
+    US equities trade in sessions, not 24/7, so a 4H bar only counts once it
+    has actually closed in America/New_York time — same closed-candle
+    handling us_scanner.py uses for the standalone scanner tab.
+
+    Execution-model note (paper only): unlike the crypto engine, which fills
+    on the *next* candle's open (always minutes away on a 24/7 market), this
+    fills at the signal bar's own close. Waiting for "the next bar's open" on
+    an equity can mean waiting through a weekend/holiday gap, so filling at
+    the just-closed bar's close is the simpler, still-conservative choice for
+    a simulation. This is disclosed to the user, not hidden."""
+    from us_scanner import _resolve_tv_bars
+
+    raw_df, _exchange = _resolve_tv_bars(symbol, "240", 300)
+    df = add_close_time(raw_df, hours=4)
+    now_ny = pd.Timestamp.now(tz='America/New_York')
+    closed = df[df['close_time'].dt.tz_convert('America/New_York') <= now_ny].copy()
+    if len(closed) < 60:
+        return  # not enough closed history yet to compute indicators safely
+
+    daily_raw, _ = _resolve_tv_bars(symbol, "1D", 400)
+    daily_local_date = daily_raw['timestamp'].dt.tz_convert('America/New_York').dt.date
+    daily_closed = daily_raw.loc[daily_local_date < now_ny.date()].copy()
+    volatile_now, atrp_pct, _ = is_volatile_daily(
+        daily_closed, cfg.VOLATILITY_ATR_LENGTH, cfg.VOLATILITY_PERCENTILE_LENGTH,
+        cfg.VOLATILITY_LOW_PERCENTILE, cfg.VOLATILITY_HIGH_PERCENTILE,
+    )
+
+    enriched = add_indicators(closed, cfg)
+    latest = enriched.iloc[-1]
+    latest_closed_time = latest['close_time']
+    i = len(enriched) - 1
+    go_long = long_signal(enriched, i, cfg)
+    go_short = short_signal(enriched, i, cfg)
+    blocked = cfg.USE_VOLATILE_FILTER and volatile_now
+
+    def _fmt(v):
+        try:
+            return round(float(v), 4)
+        except Exception:
+            return None
+
+    final_signal = 'VOLATILE_BLOCK' if blocked else ('LONG' if go_long else ('SHORT' if go_short else 'NONE'))
+    state.setdefault('watchlist_signals', {})[symbol] = {
+        'price': float(closed.iloc[-1]['close']),
+        'final': final_signal,
+        'atrp_percentile_1d': atrp_pct,
+        'updated_at': now.isoformat(),
+        'indicators': {
+            'ema': 'BULLISH' if float(latest.get('ema_fast', 0)) > float(latest.get('ema_slow', 0)) else 'BEARISH',
+            'supertrend': 'BULLISH' if bool(latest.get('supertrend_direction', False)) else 'BEARISH',
+            'adx': _fmt(latest.get('adx')), 'rsi': _fmt(latest.get('rsi')),
+            'cci': _fmt(latest.get('cci')), 'stoch': 'K/D loaded',
+            'macd': 'BULLISH' if float(latest.get('macd', 0)) > float(latest.get('macd_signal', 0)) and float(latest.get('macd_hist', 0)) > 0 else 'BEARISH',
+            'volatility': 'BLOCKED' if blocked else 'OK',
+            'atrp_percentile_1d': _fmt(atrp_pct),
+            'final': final_signal,
+        },
+    }
+
+    # Manage an existing paper position first, using the most recent known price.
+    if symbol in state.get('positions', {}):
+        process_intrabar_symbol(state, symbol, closed.iloc[-1], now)
+
+    last_map = state.setdefault('symbol_last_closed', {})
+    last_ts = pd.Timestamp(last_map.get(symbol)) if last_map.get(symbol) else None
+    if last_ts is None or latest_closed_time > last_ts:
+        last_map[symbol] = latest_closed_time.isoformat()
+        if symbol not in state.get('positions', {}):
+            if blocked:
+                go_long = go_short = False
+            if go_long and not go_short:
+                px = exec_price(float(closed.iloc[-1]['close']), 'BUY')
+                enter_symbol(state, symbol, 'LONG', px, latest, now)
+            elif go_short and not go_long:
+                px = exec_price(float(closed.iloc[-1]['close']), 'SELL')
+                enter_symbol(state, symbol, 'SHORT', px, latest, now)
+    save_state(state)
+
+
 def sync_bist_watchlist_signals(state, now):
     """BIST symbols are observation-only (no paper trading, per bist_scanner's
     design) — just mirror the latest cached scan result for any watched symbol
@@ -470,13 +556,16 @@ def main():
                 save_state(state)
 
             # Manually-added watchlist symbols (from the scanner's "+ Ekle" button).
-            # Crypto symbols get a full, independent paper position using the same
-            # strategy; BIST symbols are signal-only (bist_scanner never trades).
+            # Crypto and US stock symbols each get a full, independent paper
+            # position using the same strategy; BIST symbols are signal-only
+            # (bist_scanner never trades).
             for wsym, w in list(state.get('watchlist', {}).items()):
-                if w.get('market') != 'crypto':
-                    continue
+                market = w.get('market')
                 try:
-                    run_watchlist_symbol(state, wsym, now)
+                    if market == 'crypto':
+                        run_watchlist_symbol(state, wsym, now)
+                    elif market == 'us_stock':
+                        run_us_stock_watchlist_symbol(state, wsym, now)
                 except Exception as e:
                     print(f'WATCHLIST ERROR | {wsym} | {type(e).__name__}: {e}', flush=True)
             sync_bist_watchlist_signals(state, now)

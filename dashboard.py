@@ -5,6 +5,7 @@ from urllib.parse import urlparse, parse_qs
 import config as cfg
 from scanner import snapshot as scanner_snapshot, start_scan as scanner_start, ensure_background_scan, background_loop
 from bist_scanner import snapshot as bist_scanner_snapshot, start_scan as bist_scanner_start, background_loop as bist_background_loop
+from us_scanner import snapshot as us_scanner_snapshot, start_scan as us_scanner_start, background_loop as us_background_loop
 from state_store import (
     STATE_FILE, TRADES_FILE,
     load_state as _load_shared_state,
@@ -235,6 +236,7 @@ th.sort-active{color:var(--accent)}
   <div class="panel-head scanner-tabs">
     <button class="tab active" data-tab="crypto" onclick="switchTab('crypto')">Binance Futures</button>
     <button class="tab" data-tab="bist" onclick="switchTab('bist')">XUTUM</button>
+    <button class="tab" data-tab="us" onclick="switchTab('us')">S&amp;P 500 / Nasdaq-100</button>
     <div class="scanner-note" id="scannerNote">USDT-M perpetual &middot; 4H kapalı mum &middot; sinyal amaçlı, gerçek emir yok</div>
   </div>
 
@@ -301,6 +303,39 @@ th.sort-active{color:var(--accent)}
       </table>
     </div>
     <div class="footnote">SHORT burada yalnızca stratejinin teknik sinyalidir; BIST spot piyasasında doğrudan açığa satış emri anlamına gelmez.</div>
+  </div>
+
+  <div class="tabpane" id="tab-us">
+    <div class="scanner-controls">
+      <input id="usSearch" placeholder="Hisse ara (örn. AAPL)" oninput="renderUsScanner()">
+      <select id="usSignalFilter" onchange="renderUsScanner()">
+        <option value="ALL">Tüm sinyaller</option><option value="LONG">LONG</option><option value="SHORT">SHORT</option><option value="NO SIGNAL">NO SIGNAL</option>
+      </select>
+      <button class="btn" onclick="startUsScanner(true)">S&amp;P500/Nasdaq-100 tara</button>
+      <span class="scanner-status" id="usScannerStatus">Hazırlanıyor…</span>
+    </div>
+    <div class="scanner-summary"><span id="usCount">0 hisse</span><span class="tag tag-long" id="usLongCount">LONG 0</span><span class="tag tag-short" id="usShortCount">SHORT 0</span><span class="tag tag-flat" id="usNoCount">NO SIGNAL 0</span></div>
+    <div class="table-scroll tall">
+      <table class="datatable" id="usScannerTable">
+        <thead><tr>
+          <th class="sortable" data-key="symbol" data-tbl="us">Hisse</th>
+          <th class="sortable num" data-key="price" data-tbl="us">Fiyat</th>
+          <th class="sortable num" data-key="change_pct" data-tbl="us">Günlük %</th>
+          <th data-key="st">ST</th>
+          <th class="sortable num" data-key="adx" data-tbl="us">ADX</th>
+          <th class="sortable num" data-key="rsi" data-tbl="us">RSI</th>
+          <th class="sortable num" data-key="cci" data-tbl="us">CCI</th>
+          <th>MACD</th>
+          <th class="num">Stoch K/D</th>
+          <th class="sortable num" data-key="atrp_percentile_1d" data-tbl="us">ATRP %ile</th>
+          <th class="sortable" data-key="signal" data-tbl="us">Sinyal</th>
+          <th>Açıklama</th>
+          <th>Ekle</th>
+        </tr></thead>
+        <tbody id="usScannerRows"><tr><td colspan="13" class="empty">Tarama bekleniyor…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="footnote">S&amp;P 500 + Nasdaq-100 evreni (statik liste, periyodik güncellenmeli). Takip listesine eklenen ABD hisseleri, kripto watchlist'i gibi bağımsız bir paper pozisyon açar; SHORT taraf ödünç/marj kısıtlarını modellemeyen saf bir simülasyondur.</div>
   </div>
 </section>
 
@@ -494,7 +529,8 @@ function renderWatchlistTable(){
     }
     const added=(x.added_at||'').replace('T',' ').slice(0,16);
     const sel=selectedSymbol===x.symbol?' row-selected':'';
-    return `<tr class="row-clickable${sel}" onclick="selectSymbol('${x.symbol}')"><td><b>${x.symbol}</b></td><td>${x.market==='bist'?'XUTUM':'Binance'}</td><td>${sideCell}</td><td class="num">${num(p?p.current_price:x.current_price)}</td><td class="num">${pnlCell}</td><td class="text-faint">${added}</td><td><button class="btn" onclick="event.stopPropagation();removeFromWatchlist('${x.symbol}')">Kaldır</button></td></tr>`;
+    const marketLabel=x.market==='bist'?'XUTUM':x.market==='us_stock'?'ABD Hisse':'Binance';
+    return `<tr class="row-clickable${sel}" onclick="selectSymbol('${x.symbol}')"><td><b>${x.symbol}</b></td><td>${marketLabel}</td><td>${sideCell}</td><td class="num">${num(p?p.current_price:x.current_price)}</td><td class="num">${pnlCell}</td><td class="text-faint">${added}</td><td><button class="btn" onclick="event.stopPropagation();removeFromWatchlist('${x.symbol}')">Kaldır</button></td></tr>`;
   }).join('');
 
   document.getElementById('watchlistRows').innerHTML=rowsHtml||'<tr><td colspan="7" class="watchlist-empty">Takip listesi boş. Tarayıcıda LONG/SHORT veren bir sembole "+ Ekle" diyerek botun izlemesini/paper trade etmesini sağlayabilirsin.</td></tr>';
@@ -506,10 +542,10 @@ async function refreshWatchlist(){
   watchlistCache=d;
   renderWatchlistTable();
   if(selectedSymbol!=='ETHUSDT') renderDetail();
-  renderScanner(); renderBistScanner();
+  renderScanner(); renderBistScanner(); renderUsScanner();
 }
 
-const sortState={scanner:{key:null,dir:1},bist:{key:null,dir:1}};
+const sortState={scanner:{key:null,dir:1},bist:{key:null,dir:1},us:{key:null,dir:1}};
 function attachSort(tblId,cacheGetter,renderFn){
   document.querySelectorAll(`#${tblId} th[data-key]`).forEach(th=>{
     if(!th.classList.contains('sortable'))return;
@@ -563,6 +599,7 @@ function renderBistScanner(){
 }
 attachSort('scannerTable',()=>scannerCache,renderScanner);
 attachSort('bistScannerTable',()=>bistScannerCache,renderBistScanner);
+attachSort('usScannerTable',()=>usScannerCache,renderUsScanner);
 
 async function refreshBistScanner(){
   let d=await bistScannerData();bistScannerCache=d;
@@ -572,6 +609,28 @@ async function refreshBistScanner(){
 }
 async function startBistScanner(force=false){document.getElementById('bistScannerStatus').textContent='XUTUM taraması başlatılıyor…';try{await fetch('/api/bist-scanner/scan?force='+(force?'1':'0'),{cache:'no-store'})}catch(e){}refreshBistScanner();}
 refreshBistScanner();setInterval(refreshBistScanner,10000);
+
+async function usScannerData(){try{let r=await fetch('/api/us-scanner',{cache:'no-store'});return await r.json()}catch(e){return {status:'ERROR',results:[],last_error:String(e)}}}
+let usScannerCache={results:[]};
+function renderUsScanner(){
+  let q=(document.getElementById('usSearch')?.value||'').toUpperCase();
+  let f=document.getElementById('usSignalFilter')?.value||'ALL';
+  let rows=usScannerCache.results.filter(x=>(!q||x.symbol.includes(q))&&(f==='ALL'||x.signal===f));
+  rows=sortRows(rows,'us');
+  document.getElementById('usScannerRows').innerHTML=rows.map(x=>`<tr><td><b>${x.symbol}</b></td><td class="num">${num(x.price)}</td><td class="num ${Number(x.change_pct)>=0?'pos':'neg'}">${Number(x.change_pct||0).toFixed(2)}%</td><td>${x.st||'—'}</td><td class="num">${x.adx??'—'}</td><td class="num">${x.rsi??'—'}</td><td class="num">${x.cci??'—'}</td><td>${x.macd||'—'}</td><td class="num">${x.stoch_k??'—'} / ${x.stoch_d??'—'}</td><td class="num">${x.atrp_percentile_1d??'—'}</td><td>${sigPill(x.signal)}</td><td class="wrap-cell">${x.reason||''}</td><td>${addCell(x.symbol,'us_stock',x.signal)}</td></tr>`).join('')||'<tr><td colspan="13" class="empty">Sonuç yok.</td></tr>';
+  document.getElementById('usCount').textContent=rows.length+' hisse';
+  document.getElementById('usLongCount').textContent='LONG '+rows.filter(x=>x.signal==='LONG').length;
+  document.getElementById('usShortCount').textContent='SHORT '+rows.filter(x=>x.signal==='SHORT').length;
+  document.getElementById('usNoCount').textContent='NO SIGNAL '+rows.filter(x=>x.signal==='NO SIGNAL').length;
+}
+async function refreshUsScanner(){
+  let d=await usScannerData();usScannerCache=d;
+  let st=d.status||'IDLE';let src=d.universe_source?` &middot; Evren: ${d.universe_source}`:'';
+  let txt=st==='SCANNING'?`Tarama: ${d.symbols_done||0}/${d.symbols_total||0}`:st==='READY'?`Hazır &middot; Son 4H: ${d.last_scan_candle||'—'}${src}`:st==='ERROR'?`Hata: ${d.last_error||'Bilinmeyen hata'}`:'Bekleniyor…';
+  document.getElementById('usScannerStatus').textContent=txt;renderUsScanner();
+}
+async function startUsScanner(force=false){document.getElementById('usScannerStatus').textContent='Tarama başlatılıyor… (514 hisse, birkaç dakika sürebilir)';try{await fetch('/api/us-scanner/scan?force='+(force?'1':'0'),{cache:'no-store'})}catch(e){}refreshUsScanner();}
+refreshUsScanner();setInterval(refreshUsScanner,10000);
 
 async function refreshScanner(){
   let d=await scannerData();scannerCache=d;
@@ -696,6 +755,12 @@ class Handler(BaseHTTPRequestHandler):
             q=parse_qs(urlparse(self.path).query); force=q.get('force',['0'])[0]=='1'
             started=bist_scanner_start(force=force)
             body=json.dumps({'started':started,'status':bist_scanner_snapshot().get('status')}).encode(); self.send_response(202 if started else 200); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
+        if path=='/api/us-scanner':
+            body=json.dumps(us_scanner_snapshot(),ensure_ascii=False).encode(); self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
+        if path=='/api/us-scanner/scan':
+            q=parse_qs(urlparse(self.path).query); force=q.get('force',['0'])[0]=='1'
+            started=us_scanner_start(force=force)
+            body=json.dumps({'started':started,'status':us_scanner_snapshot().get('status')}).encode(); self.send_response(202 if started else 200); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         if path=='/api/scanner':
             body=json.dumps(scanner_snapshot(),ensure_ascii=False).encode(); self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         if path=='/api/scanner/scan':
@@ -710,7 +775,7 @@ class Handler(BaseHTTPRequestHandler):
             market=(q.get('market',[''])[0] or '').strip().lower()
             signal=(q.get('signal',[''])[0] or None)
             ok, error = False, None
-            if market not in ('crypto','bist'):
+            if market not in ('crypto','bist','us_stock'):
                 error='geçersiz piyasa'
             elif not symbol:
                 error='sembol gerekli'
@@ -739,4 +804,5 @@ def start_dashboard():
     print(f'DASHBOARD | http://0.0.0.0:{PORT} | PAPER ONLY + COIN SCANNER',flush=True)
     threading.Thread(target=background_loop, daemon=True).start()
     threading.Thread(target=bist_background_loop, daemon=True).start()
+    threading.Thread(target=us_background_loop, daemon=True).start()
     server.serve_forever()
